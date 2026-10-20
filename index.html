@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L V Spices — Batch Traceability & Recall Register</title>
+  <meta name="description" content="L V Spices Batch Traceability System — Raw material to dispatch batch tracking with recall management." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="icon" type="image/jpeg" href="assets/lv_spices_logo.jpg" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+<div id="toast" class="toast"></div>
+
+<!-- NEW BATCH ENTRY MODAL (4-Step Wizard) -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title-wrap">
+          <span class="modal-icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+          <h3 id="modal-step-title">Purchase Details</h3>
+        </div>
+        <div id="modal-step-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px;margin-left:32px;">Step 1 of 4 — Scan or enter invoice details</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- Step progress bar -->
+    <div class="modal-steps-bar">
+      <div class="modal-step active" id="bstep-dot-0"></div>
+      <div class="modal-step" id="bstep-dot-1"></div>
+      <div class="modal-step" id="bstep-dot-2"></div>
+      <div class="modal-step" id="bstep-dot-3"></div>
+    </div>
+
+    <div class="modal-body" style="padding-top:14px;">
+
+      <!-- ── STEP 0: PURCHASE DETAILS (OCR + manual) ── -->
+      <div class="modal-step-panel" id="bpanel-0">
+        <!-- OCR SCAN STRIP -->
+        <div class="autofill-banner" style="cursor:pointer;" onclick="document.getElementById('ocr-file-input').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+          <span class="autofill-label" id="ocr-scan-label">📷 Scan Purchase Invoice with AI (tap to upload)</span>
+          <input type="file" id="ocr-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onOCRFileSelected(this)">
+          <div id="ocr-progress-bar" style="display:none;flex:1;height:4px;background:#E2E8F0;border-radius:2px;overflow:hidden;margin-left:8px;"><div id="ocr-progress-fill" style="height:100%;width:0%;background:var(--brand-primary);transition:width 0.3s;border-radius:2px;"></div></div>
+        </div>
+        
+        <!-- Multi-Item Invoice Picker (visible if AI detects multiple items) -->
+        <div id="ocr-items-picker" class="ocr-items-picker hidden">
+          <div class="ocr-items-picker-title">
+            <span>📋 Multiple items found in invoice — Click an item to populate:</span>
+          </div>
+          <div id="ocr-items-chips-wrap"></div>
+        </div>
+
+        <div id="ocr-thumb-row" style="display:none;margin:8px 0 10px;padding:8px 10px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;align-items:center;gap:10px;">
+          <img id="ocr-thumb" style="width:48px;height:48px;object-fit:cover;border-radius:6px;" src="" alt="scan">
+          <span id="ocr-thumb-label" style="font-size:11px;color:var(--text-secondary);font-weight:500;"></span>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:6px;">
+          <div class="form-row" style="flex:1.2">
+            <label>Purchase Date *</label>
+            <input type="date" id="n-purchase-date" onchange="onDateOrProductChange()" />
+          </div>
+          <div class="form-row" style="flex:2">
+            <label>Invoice / Bill No. *</label>
+            <input type="text" id="n-invoice" placeholder="e.g. INV/2026/001" />
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:2">
+            <label>Supplier Name *</label>
+            <input type="text" id="n-supplier" placeholder="e.g. Vijay Masala Wholesale" />
+          </div>
+          <div class="form-row" style="flex:1.5">
+            <label>Supplier Batch / Lot No.</label>
+            <input type="text" id="n-supplier-batch" placeholder="e.g. VMW-901" />
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:2">
+            <label>Product / Raw Material Name *</label>
+            <input type="text" id="n-product" placeholder="e.g. Chilli Flakes" list="product-datalist" oninput="onProductInput(this.value)" onchange="onProductInput(this.value)" />
+            <datalist id="product-datalist"></datalist>
+          </div>
+          <div class="form-row" style="flex:1">
+            <label>Purchase Qty (kg)</label>
+            <input type="number" id="n-qty" placeholder="100" min="0" oninput="updateBalancePreview()" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 1: PROCESSING / BATCH NO ── -->
+      <div class="modal-step-panel hidden" id="bpanel-1">
+        <div style="display:flex;gap:12px;">
+          <div class="form-row" style="flex:1.2">
+            <label>Processing Done (Yes/No)</label>
+            <select id="n-processing" onchange="onProcessingChange(this.value)">
+              <option value="No">No (direct repacking)</option>
+              <option value="Yes">Yes (mixed / blend / processed)</option>
+            </select>
+            <div id="processing-auto-hint" style="font-size:10px;color:var(--accent-green-dark);font-weight:600;margin-top:3px;display:none;">⚡ Mix/Blend masala detected → Auto-set to Yes</div>
+          </div>
+          <div class="form-row" style="flex:2" id="n-ingredients-row" style="display:none;">
+            <label>Other Ingredients &amp; Their Batch Nos.</label>
+            <input type="text" id="n-ingredients" placeholder="e.g. Coriander Powder (CP-1026), Salt (ST-1026)" />
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:1">
+            <label>Final Batch No. *</label>
+            <input type="text" id="n-final-batch" placeholder="e.g. CF-1026" />
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" id="batch-hint">Auto-generated from product abbreviation + month-year (CF-1026 style)</div>
+          </div>
+          <div class="form-row" style="flex:1">
+            <label>Repacking / Processing Date</label>
+            <input type="date" id="n-repack-date" />
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:1">
+            <label>Storage Location</label>
+            <select id="n-storage">
+              <option>Dry Storage Room A</option>
+              <option>Dry Storage Room B</option>
+              <option>Cold Storage</option>
+              <option>Packing Area Store</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: PACKING QTY (from Label Maker) ── -->
+      <div class="modal-step-panel hidden" id="bpanel-2">
+        <!-- Live Label Maker DB Card -->
+        <div class="label-stats-box" id="label-live-stats-box">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:12px;font-weight:700;color:#166534;display:flex;align-items:center;gap:6px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Label Maker Database (Dukan Bai Stickers)</span>
+            </div>
+            <button type="button" class="btn-ghost" style="padding:3px 8px;font-size:10.5px;background:#DCFCE7;border-color:#86EFAC;color:#166534;" onclick="applyLabelStats()">⚡ Auto-Fill From DB</button>
+          </div>
+          <div class="label-stats-grid">
+            <div class="label-stat-pill">
+              <div class="label-stat-pill-num" id="lbl-p100">0</div>
+              <div class="label-stat-pill-lbl">100g Pouches</div>
+            </div>
+            <div class="label-stat-pill">
+              <div class="label-stat-pill-num" id="lbl-p200">0</div>
+              <div class="label-stat-pill-lbl">200g Pouches</div>
+            </div>
+            <div class="label-stat-pill">
+              <div class="label-stat-pill-num" id="lbl-p500">0</div>
+              <div class="label-stat-pill-lbl">500g Pouches</div>
+            </div>
+            <div class="label-stat-pill">
+              <div class="label-stat-pill-num" id="lbl-p1000">0</div>
+              <div class="label-stat-pill-lbl">1kg Pouches</div>
+            </div>
+          </div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#166534;">
+            <span>Total Printed Packages: <strong id="lbl-total-pcs">0</strong></span>
+            <span>Total Weight: <strong id="lbl-total-kg" style="font-size:13px;color:var(--brand-primary);">0.00 kg</strong></span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-secondary);">Individual Print Batches (tap any to select):</div>
+        <div id="label-pkg-list" style="max-height:140px;overflow-y:auto;border:1px solid var(--border-light);border-radius:8px;margin-bottom:12px;background:#FFFFFF;"></div>
+        
+        <div style="display:flex;gap:12px;">
+          <div class="form-row" style="flex:1">
+            <label>Total Finished / Packed Qty (kg) *</label>
+            <input type="number" id="n-total-finished" placeholder="e.g. 50" min="0" step="any" oninput="updateBalancePreview()" />
+          </div>
+          <div class="form-row" style="flex:1">
+            <label>No. of Packages (pouches count)</label>
+            <input type="number" id="n-pkg-count" placeholder="e.g. 40" min="0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 3: DISPATCH ── -->
+      <div class="modal-step-panel hidden" id="bpanel-3">
+        <div style="margin-bottom:10px;padding:10px 12px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;font-size:12px;color:#92400E;">
+          <strong>🚚 Dispatch Details</strong> (leave blank if batch is not dispatched yet)
+        </div>
+        <div style="display:flex;gap:12px;">
+          <div class="form-row" style="flex:1">
+            <label>Dispatch Date</label>
+            <input type="date" id="n-dispatch-date" />
+          </div>
+          <div class="form-row" style="flex:1">
+            <label>Dispatch Qty (kg)</label>
+            <input type="number" id="n-dispatch-qty" placeholder="0" min="0" step="any" oninput="updateBalancePreview()" />
+          </div>
+          <div class="form-row" style="flex:1.2">
+            <label>Invoice / Dispatch Ref No.</label>
+            <input type="text" id="n-dispatch-ref" placeholder="e.g. DIS/2026/001" />
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:12px 14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--text-secondary);">Inward / Finished Qty</span>
+            <span style="font-size:13px;font-weight:600;" id="prev-purchase-qty">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:12px;color:var(--text-secondary);">Dispatch Qty</span>
+            <span style="font-size:13px;font-weight:600;color:#D97706;" id="prev-dispatch-qty">—</span>
+          </div>
+          <div style="border-top:1px solid #E2E8F0;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;">Balance Stock (In Hand)</span>
+            <span style="font-size:16px;font-weight:800;color:var(--brand-primary);" id="prev-balance">—</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end modal-body -->
+
+    <div class="modal-footer" style="justify-content:space-between;">
+      <button class="btn-ghost" id="batch-back-btn" onclick="batchStepNav(-1)" style="display:none;">← Back</button>
+      <div style="display:flex;gap:10px;margin-left:auto;">
+        <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" id="batch-next-btn" onclick="batchStepNav(1)">Next →</button>
+        <button class="btn-primary hidden" id="save-batch-btn" onclick="saveNewBatch()">Save Batch</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT BATCH RECORD MODAL (for editing complaint, recall status, dispatch, etc.) -->
+<div class="modal-overlay" id="edit-modal-overlay" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-box" style="max-width:580px;">
+    <div class="modal-header">
+      <div class="modal-title-wrap">
+        <span class="modal-icon-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </span>
+        <div>
+          <h3>Edit Batch &amp; Complaint Record</h3>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px;" id="edit-batch-sub">Batch: —</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:14px;">
+      <input type="hidden" id="e-batch-id" />
+      
+      <!-- Complaint & Recall Status Section -->
+      <div style="padding:10px 12px;background:#FFF1F2;border:1px solid #FECDD3;border-radius:8px;font-size:12px;color:var(--brand-dark);margin-bottom:12px;">
+        <strong>⚠️ Complaint &amp; Recall Status</strong>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div class="form-row" style="flex:1">
+          <label>Recall Status</label>
+          <select id="e-recall-status">
+            <option value="Closed">Closed (Cleared / Normal)</option>
+            <option value="Open">Open (Active Issue / Recall)</option>
+            <option value="Under Investigation">Under Investigation</option>
+          </select>
+        </div>
+        <div class="form-row" style="flex:1.5">
+          <label>Complaint / Defect Details</label>
+          <input type="text" id="e-complaint" placeholder="e.g. None / Moisture / Packaging defect" />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <label>Action Taken / Resolution</label>
+        <input type="text" id="e-action-taken" placeholder="e.g. Lot verified, cleared by QC" />
+      </div>
+
+      <!-- Dispatch & Stock Section -->
+      <div style="margin-top:16px;padding:10px 12px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;font-size:12px;color:#92400E;">
+        <strong>🚚 Dispatch &amp; Stock Update</strong>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:10px;">
+        <div class="form-row" style="flex:1">
+          <label>Dispatch Date</label>
+          <input type="date" id="e-dispatch-date" />
+        </div>
+        <div class="form-row" style="flex:1">
+          <label>Dispatch Qty (kg)</label>
+          <input type="number" id="e-dispatch-qty" placeholder="0" min="0" step="any" oninput="updateEditBalancePreview()" />
+        </div>
+        <div class="form-row" style="flex:1.2">
+          <label>Invoice / Dispatch Ref</label>
+          <input type="text" id="e-dispatch-ref" placeholder="e.g. DIS/2026/001" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:10px;">
+        <div class="form-row" style="flex:1">
+          <label>Storage Location</label>
+          <select id="e-storage">
+            <option>Dry Storage Room A</option>
+            <option>Dry Storage Room B</option>
+            <option>Cold Storage</option>
+            <option>Packing Area Store</option>
+          </select>
+        </div>
+        <div class="form-row" style="flex:1">
+          <label>Verified By</label>
+          <input type="text" id="e-verified-by" placeholder="Rajesh Sharma" />
+        </div>
+      </div>
+
+      <!-- Live Balance preview in edit modal -->
+      <div style="margin-top:14px;padding:10px 14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:var(--text-secondary);font-weight:600;">Updated Balance Stock:</span>
+        <span style="font-size:16px;font-weight:800;color:var(--brand-primary);" id="e-balance-preview">—</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-primary" id="save-edit-btn" onclick="saveBatchEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+<div class="app-container">
+  <!-- SIDEBAR (Luxury Warm Cream Palette) -->
+  <aside class="sidebar" id="sidebar">
+    <!-- Pinned Branding Header -->
+    <div class="sidebar-brand">
+      <div class="brand-logo-wrap">
+        <img src="assets/lv_spices_logo.jpg" alt="L V Spices Logo" class="brand-logo-img" />
+      </div>
+      <div class="brand-text">
+        <h1>L V SPICES</h1>
+        <span>BATCH TRACEABILITY</span>
+      </div>
+      <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Close sidebar">✕</button>
+    </div>
+
+    <!-- 2x2 Statistics Grid -->
+    <div class="sidebar-stats-grid">
+      <!-- 1: Batches -->
+      <div class="stat-mini-card">
+        <div class="stat-mini-icon stat-icon-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+        </div>
+        <div class="stat-mini-content">
+          <span class="stat-val" id="stat-batches">—</span>
+          <span class="stat-lbl">BATCHES</span>
+        </div>
+      </div>
+
+      <!-- 2: Products -->
+      <div class="stat-mini-card">
+        <div class="stat-mini-icon stat-icon-orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M16.5 9.4 7.55 4.24a1.79 1.79 0 0 0-1.8 0l-1.9 1.1A1.8 1.8 0 0 0 3 6.91V17.1a1.8 1.8 0 0 0 .85 1.57l1.9 1.1a1.8 1.8 0 0 0 1.8 0l8.95-5.16a1.8 1.8 0 0 0 .85-1.57V6.91a1.8 1.8 0 0 0-.85-1.57Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+        </div>
+        <div class="stat-mini-content">
+          <span class="stat-val" id="stat-products">—</span>
+          <span class="stat-lbl">PRODUCTS</span>
+        </div>
+      </div>
+
+      <!-- 3: Balance Stock -->
+      <div class="stat-mini-card">
+        <div class="stat-mini-icon stat-icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M16 16.5a3.5 3.5 0 0 0-7 0"/><path d="M12 2v20"/><path d="m3 7 9-4 9 4"/><path d="M6 12 3 7h6l-3 5Z"/><path d="M18 12l-3-5h6l-3 5Z"/></svg>
+        </div>
+        <div class="stat-mini-content">
+          <span class="stat-val stat-val-sm" id="stat-stock">—</span>
+          <span class="stat-lbl">BALANCE STOCK</span>
+        </div>
+      </div>
+
+      <!-- 4: Open Recalls -->
+      <div class="stat-mini-card">
+        <div class="stat-mini-icon stat-icon-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="stat-mini-content">
+          <span class="stat-val" id="stat-recalls">0</span>
+          <span class="stat-lbl">OPEN RECALLS</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Label Maker Sync Status -->
+    <div class="label-sync-card" id="label-sync-status">
+      <div class="sync-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <span class="sync-text">Label Maker: <strong>Syncing…</strong></span>
+    </div>
+
+    <!-- Search Input -->
+    <div class="sidebar-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="Search batches…" oninput="onSearchChange(this.value)" />
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="sidebar-actions">
+      <button class="btn-sidebar-primary" onclick="openNewModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>+ New Batch Entry</span>
+      </button>
+      <button class="btn-sidebar-ghost" onclick="exportExcel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Export Excel</span>
+      </button>
+    </div>
+
+    <!-- Decorative Transparent Spice Composition (Bottom-Left) -->
+    <img src="assets/sidebar-batch-spices.png" alt="Indian Spices Composition" class="sidebar-spice-img" />
+  </aside>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="main-wrapper">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="Toggle navigation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="topbar-headings">
+          <h2 class="page-title">Batch Traceability & <span class="highlight-brand">Recall Register</span></h2>
+          <div class="page-subtitle">Raw Material → Processing → Dispatch • <span class="highlight-green">Auto-fills from Label Maker DB</span></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="cloud-badge connected" id="cloud-status-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          <span id="cloud-status-text">Cloud Synced</span>
+        </div>
+        <button class="btn-topbar-primary" onclick="openNewModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>+ New Batch</span>
+        </button>
+        <button class="btn-topbar-ghost" onclick="exportExcel()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export Excel</span>
+        </button>
+        <button class="btn-topbar-ghost" onclick="printPage()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>Print</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <div class="content-body">
+      <!-- 12 BATCH INFORMATION METADATA CARDS & OTHER INGREDIENTS STRIP -->
+      <section class="detail-card-wrap" id="detail-card">
+        <div class="empty-detail-state">Loading batch details…</div>
+      </section>
+
+      <!-- COMPLETE BATCH TRACEABILITY REGISTER TABLE CARD -->
+      <section class="table-card">
+        <div class="table-card-header">
+          <div class="table-card-title">
+            <span class="table-icon-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </span>
+            <h2>Complete Batch Traceability Register</h2>
+          </div>
+        </div>
+        <div class="table-scroll-wrapper">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>SR.</th>
+                <th>PURCHASE DATE</th>
+                <th>PRODUCT & BATCH</th>
+                <th>SUPPLIER</th>
+                <th>INVOICE NO.</th>
+                <th style="text-align:right">QTY (KG)</th>
+                <th style="text-align:center">PROCESSED</th>
+                <th>OTHER INGREDIENTS</th>
+                <th>FINAL BATCH NO.</th>
+                <th>REPACKING DATE</th>
+                <th>STORAGE</th>
+                <th style="text-align:right">FINISHED QTY (KG)</th>
+                <th>DISPATCH DATE</th>
+                <th style="text-align:right">DISPATCH QTY</th>
+                <th>INVOICE REF</th>
+                <th style="text-align:right">BALANCE (KG)</th>
+                <th>COMPLAINT</th>
+                <th>ACTION</th>
+                <th style="text-align:center">RECALL</th>
+                <th>VERIFIED BY</th>
+                <th style="text-align:center">EDIT</th>
+              </tr>
+            </thead>
+            <tbody id="batch-tbody">
+              <tr>
+                <td colspan="21" style="text-align:center;padding:40px;color:var(--text-muted)">Loading batches…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/app.js"></script>
+<script>
+  // Update label sync status dynamically
+  setInterval(() => {
+    const el = document.getElementById('label-sync-status');
+    if (!el) return;
+    const sel = document.getElementById('n-label-select');
+    const count = sel ? sel.options.length - 1 : 0;
+    if (count > 0) {
+      el.innerHTML = `
+        <div class="sync-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <span class="sync-text">Label Maker: <strong>${count} products synced</strong></span>
+      `;
+    }
+  }, 2000);
+</script>
+</body>
+</html>
