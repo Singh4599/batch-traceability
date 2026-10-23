@@ -322,7 +322,7 @@ window.openBatch = function(id) {
   const ingTotalWt   = ingArr.reduce((s, i) => s + (Number(i.weight) || 0), 0);
   const totalInputWt = purchaseQty + ingTotalWt;
   const netWt        = Number(b.netWeight) || purchaseQty;
-  const finishedQty  = Number(b.totalFinishedQty) || netWt;
+  const finishedQty  = Number(b.totalFinishedQty) || 0;  // 0 = not packed yet (no Label Maker data)
   const bal          = Number(b.balanceStock) || 0;
   const procType     = b.processingType || '';
   const shortage     = Number(b.blendShortage) || 0;
@@ -446,34 +446,44 @@ window.openBatch = function(id) {
 
       <!-- Step 3: STORAGE & PACKAGING -->
       ${(()=>{
-        const packedQty   = finishedQty;
-        const unpackedQty = Math.max(0, +(netWt - finishedQty).toFixed(3));
-        const packPct     = netWt > 0 ? Math.min(100, Math.round((packedQty / netWt) * 100)) : 0;
-        const repackProgress = `
-          <div style="margin:8px 0 12px;background:#F0F4FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:12px 14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
-              <span style="font-size:11px;font-weight:700;color:#3730A3;text-transform:uppercase;letter-spacing:.4px;">📦 Repacking Status</span>
-              <span style="font-size:11px;color:#6366F1;font-weight:800;">${packPct}% Packed</span>
-            </div>
-            <div style="background:#C7D2FE;border-radius:20px;height:7px;overflow:hidden;margin-bottom:10px;">
-              <div style="background:linear-gradient(90deg,#4F46E5,#818CF8);height:100%;width:${packPct}%;border-radius:20px;"></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-              <div style="background:#fff;border-radius:8px;padding:8px 4px;border:1px solid #DDE3FF;">
-                <div style="font-size:9px;color:#6B7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Net Output</div>
-                <div style="font-size:16px;font-weight:900;color:#0F172A;">${netWt} kg</div>
-              </div>
-              <div style="background:#F0FDF4;border-radius:8px;padding:8px 4px;border:1px solid #86EFAC;">
-                <div style="font-size:9px;color:#15803D;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Packed ✓</div>
-                <div style="font-size:16px;font-weight:900;color:#059669;">${packedQty} kg</div>
-              </div>
-              <div style="background:${unpackedQty > 0 ? '#FEFCE8' : '#F9FAFB'};border-radius:8px;padding:8px 4px;border:1px solid ${unpackedQty > 0 ? '#FDE047' : '#E5E7EB'};">
-                <div style="font-size:9px;color:${unpackedQty > 0 ? '#854D0E' : '#6B7280'};font-weight:700;text-transform:uppercase;margin-bottom:3px;">Remaining</div>
-                <div style="font-size:16px;font-weight:900;color:${unpackedQty > 0 ? '#CA8A04' : '#9CA3AF'};">${unpackedQty} kg</div>
-              </div>
-            </div>
-            ${packageCount ? `<div style="text-align:center;margin-top:8px;font-size:11px;color:#4338CA;font-weight:700;">🏷️ ${packageCount} packages made</div>` : ''}
-          </div>`;
+        const packedQty   = finishedQty;                               // from Label Maker only
+        const pkgDone     = packedQty > 0 || Number(packageCount) > 0; // has any packing happened?
+        const unpackedQty = Math.max(0, +(netWt - packedQty).toFixed(3));
+        const packPct     = netWt > 0 && pkgDone ? Math.min(100, Math.round((packedQty / netWt) * 100)) : 0;
+
+        const repackProgress = pkgDone
+          ? `<div style="margin:8px 0 12px;background:#F0F4FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:12px 14px;">
+               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+                 <span style="font-size:11px;font-weight:700;color:#3730A3;text-transform:uppercase;letter-spacing:.4px;">📦 Repacking Status</span>
+                 <span style="font-size:11px;color:#6366F1;font-weight:800;">${packPct}% Packed</span>
+               </div>
+               <div style="background:#C7D2FE;border-radius:20px;height:7px;overflow:hidden;margin-bottom:10px;">
+                 <div style="background:linear-gradient(90deg,#4F46E5,#818CF8);height:100%;width:${packPct}%;border-radius:20px;"></div>
+               </div>
+               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+                 <div style="background:#fff;border-radius:8px;padding:8px 4px;border:1px solid #DDE3FF;">
+                   <div style="font-size:9px;color:#6B7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Net Output</div>
+                   <div style="font-size:16px;font-weight:900;color:#0F172A;">${netWt} kg</div>
+                 </div>
+                 <div style="background:#F0FDF4;border-radius:8px;padding:8px 4px;border:1px solid #86EFAC;">
+                   <div style="font-size:9px;color:#15803D;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Packed ✓</div>
+                   <div style="font-size:16px;font-weight:900;color:#059669;">${packedQty} kg</div>
+                 </div>
+                 <div style="background:${unpackedQty > 0 ? '#FEFCE8' : '#F9FAFB'};border-radius:8px;padding:8px 4px;border:1px solid ${unpackedQty > 0 ? '#FDE047' : '#E5E7EB'};">
+                   <div style="font-size:9px;color:${unpackedQty > 0 ? '#854D0E' : '#059669'};font-weight:700;text-transform:uppercase;margin-bottom:3px;">Remaining</div>
+                   <div style="font-size:16px;font-weight:900;color:${unpackedQty > 0 ? '#CA8A04' : '#059669'};">${unpackedQty} kg</div>
+                 </div>
+               </div>
+               ${packageCount ? `<div style="text-align:center;margin-top:8px;font-size:11px;color:#4338CA;font-weight:700;">🏷️ ${packageCount} packages made</div>` : ''}
+             </div>`
+          : `<div style="margin:8px 0 12px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
+               <span style="font-size:22px;">⏳</span>
+               <div>
+                 <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.4px;">Repacking Not Started</div>
+                 <div style="font-size:12px;color:#78350F;margin-top:2px;">No packages recorded yet — use Label Maker to update.</div>
+               </div>
+             </div>`;
+
         return section('#ECFDF5', '📦', 'STEP 3 — Storage & Packaging',
             repackProgress
           + chipRow('🗄️', 'Storage Breakdown', storageChipHtml)
