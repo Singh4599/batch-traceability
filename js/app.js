@@ -565,20 +565,30 @@ window.recalcNetWeight = function() {
   const rows = document.querySelectorAll('#ingredient-rows .ingredient-row');
   let total = 0;
   rows.forEach(r => { total += Number(r.querySelector('.ing-weight')?.value) || 0; });
-  const procType = document.querySelector('input[name="proc-type"]:checked')?.value || '';
-  const shortPct = procType === 'factory'
-    ? Number(document.getElementById('factory-shortage-pct')?.value) || 9
-    : 0;
-  const netWt = +(total * (1 - shortPct / 100)).toFixed(3);
+
+  const procType  = document.querySelector('input[name="proc-type"]:checked')?.value || '';
+  const processing = document.getElementById('n-processing')?.value;
+  const purchaseQty = Number(document.getElementById('n-qty')?.value) || 0;
   const nwEl = document.getElementById('n-net-weight');
-  if (nwEl && total > 0) nwEl.value = netWt;
   const totalEl = document.getElementById('ingredients-total');
-  if (totalEl) {
-    if (total === 0) { totalEl.textContent = ''; }
-    else if (procType === 'factory') {
-      totalEl.innerHTML = 'Total in: <strong>' + total + ' kg</strong> &rarr; After <strong>' + shortPct + '%</strong> loss: <strong style="color:#4338CA">' + netWt + ' kg</strong>';
-    } else {
-      totalEl.innerHTML = 'Total: <strong style="color:#166534">' + total + ' kg</strong> (no loss)';
+
+  if (processing !== 'Yes' || !procType) {
+    // No processing — net weight = purchase qty
+    if (nwEl && purchaseQty > 0) nwEl.value = purchaseQty;
+    if (totalEl) totalEl.textContent = '';
+  } else {
+    const shortPct = procType === 'factory'
+      ? Number(document.getElementById('factory-shortage-pct')?.value) || 9
+      : 0;
+    const netWt = +(total * (1 - shortPct / 100)).toFixed(3);
+    if (nwEl && total > 0) nwEl.value = netWt;
+    if (totalEl) {
+      if (total === 0) { totalEl.textContent = ''; }
+      else if (procType === 'factory') {
+        totalEl.innerHTML = 'Total in: <strong>' + total + ' kg</strong> &rarr; After <strong>' + shortPct + '%</strong> loss: <strong style="color:#4338CA">' + netWt + ' kg</strong>';
+      } else {
+        totalEl.innerHTML = 'Total: <strong style="color:#166534">' + total + ' kg</strong> (no loss — Net Wt = ' + total + ' kg)';
+      }
     }
   }
   onStorageQtyChange();
