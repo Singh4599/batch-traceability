@@ -284,7 +284,7 @@ function renderTable() {
         <td style="font-weight:700;font-size:11px;color:var(--text-primary);">${b.finalBatchNo || '—'}</td>
         <td class="td-date">${b.repackingDate || '—'}</td>
         <td style="font-size:11px;">${b.storageLocation || '—'}</td>
-        <td class="td-qty">${b.totalFinishedQty ?? b.purchaseQty ?? 0}</td>
+        <td class="td-qty">${b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0}</td>
         <td class="td-date">${b.dispatchDate || '—'}</td>
         <td class="td-qty">${b.dispatchQty || '—'}</td>
         <td class="td-date">${b.invoiceRef || '—'}</td>
@@ -355,13 +355,13 @@ window.openBatch = function(id) {
         ${metaCard('INVOICE NO.', b.invoiceNo || '—', 'icon-box-blue', `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`)}
         ${metaCard('SUPPLIER', b.supplierName || '—', 'icon-box-red', `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`)}
         ${metaCard('SUPPLIER BATCH', b.supplierBatch || '—', 'icon-box-red', `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`)}
-        ${metaCard('INWARD QTY', (b.purchaseQty ?? 0) + ' kg', 'icon-box-orange', `<path d="M6 3h12l4 6-10 12L2 9l4-6z"/>`)}
+        ${metaCard('INWARD QTY', (b.netWeight ?? b.purchaseQty ?? 0) + ' kg', 'icon-box-orange', `<path d="M6 3h12l4 6-10 12L2 9l4-6z"/>`)}
         ${metaCard('PROCESSING DONE', b.processingDone || 'No', 'icon-box-orange', `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`)}
         ${metaCard('STORAGE', b.storageLocation || '—', 'icon-box-green', `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`)}
       </div>
 
       <div class="meta-row-4">
-        ${metaCard('PACKED / FINISHED', (b.totalFinishedQty ?? b.purchaseQty ?? 0) + ' kg', 'icon-box-green', `<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`)}
+        ${metaCard('PACKED / FINISHED', (b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0) + ' kg', 'icon-box-green', `<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`)}
         ${metaCard('DISPATCH QTY', (b.dispatchQty || 0) + ' kg', 'icon-box-orange', `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`)}
         ${metaCard('DISPATCH DATE', b.dispatchDate || '—', 'icon-box-blue', `<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`)}
         ${metaCard('BALANCE STOCK', bal + ' kg', 'icon-box-red', `<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>`, 'value-brand')}
@@ -982,7 +982,7 @@ window.saveNewBatch = async function() {
   const storageLocation = storageAlloc.length
     ? storageAlloc.map(a => `${a.location}${a.qty ? ' ('+a.qty+'kg)' : ''}`).join(', ')
     : 'Unspecified';
-  const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || purchaseQty;
+  const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || netWeight || purchaseQty;
   const dispatchDate  = document.getElementById('n-dispatch-date').value;
   const dispatchQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
   const invoiceRef    = document.getElementById('n-dispatch-ref').value.trim();
