@@ -303,16 +303,18 @@ function renderEmptyDetailCard() {
   det.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);background:#FFFFFF;border-radius:12px;border:1px solid var(--border-light);">No batch selected. Choose a row or click <strong>"+ New Batch"</strong> to record an entry.</div>`;
 }
 
-// ── DETAIL CARD RENDERING ────────────────────────────────────────────────────
+// ── BATCH DETAIL MODAL ───────────────────────────────────────────────────────
+window.closeBatchModal = function() {
+  const m = document.getElementById('batch-detail-modal');
+  if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
+};
+
 window.openBatch = function(id) {
   currentBatchId = id;
   renderTable();
 
   const b = allBatches.find(x => x.id === id);
-  if (!b) { renderEmptyDetailCard(); return; }
-
-  const det = document.getElementById('detail-card');
-  if (!det) return;
+  if (!b) return;
 
   const isRecallOpen = b.recallStatus === 'Open' || b.recallStatus === 'Under Investigation';
   const purchaseQty  = Number(b.purchaseQty)  || 0;
@@ -328,166 +330,164 @@ window.openBatch = function(id) {
   const dispatchQty  = b.dispatchQty && b.dispatchQty !== '—' ? Number(b.dispatchQty) : 0;
   const dispatchDate = b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : null;
 
-  // --- Storage chips ---
-  let storageChips = '';
-  if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
-    storageChips = b.storageAllocation.map(a =>
-      `<div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D1FAE5;border-radius:8px;padding:5px 12px;margin:3px;">
-        <span style="font-size:13px;font-weight:800;color:#059669;">${a.qty || '?'} kg</span>
-        <span style="font-size:11px;color:#374151;">— ${a.location}</span>
-       </div>`
-    ).join('');
-  } else {
-    storageChips = `<span style="font-size:12px;color:#6B7280;">${b.storageLocation || '—'}</span>`;
-  }
+  // ── helpers ──
+  const row = (icon, label, val, valStyle='') => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
+      <span style="font-size:14px;width:20px;text-align:center;flex-shrink:0;margin-top:1px;">${icon}</span>
+      <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
+      <span style="font-size:12.5px;color:#0F172A;font-weight:500;flex:1;line-height:1.5;${valStyle}">${val}</span>
+    </div>`;
 
-  // --- Ingredient chips ---
-  const ingChips = ingArr.length
+  const chipRow = (icon, label, content) => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
+      <span style="font-size:14px;width:20px;text-align:center;flex-shrink:0;margin-top:1px;">${icon}</span>
+      <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
+      <div style="flex:1;display:flex;flex-wrap:wrap;gap:4px;">${content}</div>
+    </div>`;
+
+  const section = (color, emoji, title, body) => `
+    <div style="margin-bottom:16px;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+      <div style="background:${color};padding:10px 18px;display:flex;align-items:center;gap:9px;">
+        <span style="font-size:17px;">${emoji}</span>
+        <span style="font-size:12.5px;font-weight:800;color:#0F172A;letter-spacing:.2px;">${title}</span>
+      </div>
+      <div style="background:#fff;padding:4px 18px 8px;">
+        ${body}
+      </div>
+    </div>`;
+
+  const chip = (text, bg, color, border) =>
+    `<span style="background:${bg};color:${color};border:1.5px solid ${border};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">${text}</span>`;
+
+  const ingChipHtml = ingArr.length
     ? ingArr.map(i =>
-        `<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 12px;margin:3px;">
-           <span style="font-size:12px;font-weight:700;color:#1D4ED8;">${i.name}</span>
-           ${i.batch && i.batch !== 'NIL' ? `<span style="font-size:10px;background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:4px;">Lot: ${i.batch}</span>` : ''}
-           <span style="font-size:12px;font-weight:700;color:#374151;">${i.weight} kg</span>
+        `<div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:6px;">
+          <strong style="font-size:12px;color:#1D4ED8;">${i.name}</strong>
+          ${i.batch && i.batch !== 'NIL' ? `<span style="background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:4px;font-size:10px;">Lot: ${i.batch}</span>` : ''}
+          <strong style="font-size:12px;color:#374151;">${i.weight} kg</strong>
          </div>`
       ).join('')
     : (b.otherIngredients && b.otherIngredients !== '—'
         ? `<span style="font-size:12px;color:#374151;">${b.otherIngredients}</span>`
-        : `<span style="font-size:12px;color:#9CA3AF;">None added</span>`);
+        : `<span style="font-size:11px;color:#9CA3AF;">None added</span>`);
 
-  // --- Processing label ---
-  let procLabel = 'None', procColor = '#6B7280', procBg = '#F9FAFB';
+  const storageChipHtml = (() => {
+    if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
+      return b.storageAllocation.map(a =>
+        `<div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:6px;">
+           <strong style="font-size:12px;color:#059669;">${a.qty || '?'} kg</strong>
+           <span style="font-size:11px;color:#374151;">— ${a.location}</span>
+         </div>`
+      ).join('');
+    }
+    return `<span style="font-size:12px;color:#374151;">${b.storageLocation || '—'}</span>`;
+  })();
+
+  // processing
+  let procLabel = chip('⬜ None', '#F9FAFB', '#6B7280', '#E5E7EB');
   if (b.processingDone === 'Yes') {
-    if (procType === 'factory')   { procLabel = '🏭 Factory (Grinding)'; procColor = '#7C3AED'; procBg = '#F5F3FF'; }
-    else if (procType === 'blend'){ procLabel = '🌀 Blending';            procColor = '#0891B2'; procBg = '#ECFEFF'; }
-    else                          { procLabel = '✅ ' + procType;          procColor = '#059669'; procBg = '#ECFDF5'; }
+    if (procType === 'factory')    procLabel = chip('🏭 Factory — Grinding', '#F5F3FF', '#6D28D9', '#DDD6FE');
+    else if (procType === 'blend') procLabel = chip('🌀 Blending',           '#ECFEFF', '#0891B2', '#A5F3FC');
+    else                           procLabel = chip('✅ ' + procType,         '#ECFDF5', '#059669', '#A7F3D0');
   }
 
-  // --- KV row helper ---
-  const kv = (k, v) => `
-    <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F3F4F6;">
-      <span style="width:140px;flex-shrink:0;font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;line-height:1.4;">${k}</span>
-      <span style="font-size:12px;color:#111827;font-weight:500;flex:1;line-height:1.4;">${v}</span>
-    </div>`;
+  const shortageBlock = (b.processingDone === 'Yes' && procType === 'factory' && shortage > 0)
+    ? `<div style="margin:10px 0 4px;background:linear-gradient(135deg,#FFF1F2,#FEF2F2);border:2px solid #FECDD3;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px;">
+         <div style="font-size:28px;">⚠️</div>
+         <div>
+           <div style="font-size:10px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Grinding Loss / Shortage</div>
+           <div style="font-size:26px;font-weight:900;color:#DC2626;line-height:1;">−${shortage} kg</div>
+           <div style="font-size:11px;color:#9F1239;margin-top:2px;">${purchaseQty} kg in → ${netWt} kg net output</div>
+         </div>
+       </div>` : '';
 
-  // --- Section card helper ---
-  const card = (content, extraStyle='') =>
-    `<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:hidden;${extraStyle}">${content}</div>`;
+  document.getElementById('batch-modal-body').innerHTML = `
+    <div style="font-family:'Inter',system-ui,sans-serif;">
 
-  const cardHead = (emoji, title, subtitle='', bg='#F9FAFB', color='#111827') =>
-    `<div style="display:flex;align-items:center;gap:10px;background:${bg};padding:11px 16px;border-bottom:1px solid #E5E7EB;">
-       <span style="font-size:18px;line-height:1;">${emoji}</span>
-       <div>
-         <div style="font-size:13px;font-weight:800;color:${color};line-height:1.2;">${title}</div>
-         ${subtitle ? `<div style="font-size:10px;color:${color};opacity:.65;margin-top:1px;">${subtitle}</div>` : ''}
-       </div>
-     </div>`;
-
-  const body = (content) => `<div style="padding:4px 16px 8px;">${content}</div>`;
-
-  det.innerHTML = `
-  <div style="font-family:'Inter',system-ui,sans-serif;">
-
-    <!-- ══ HEADER BAR ══ -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:5px;line-height:1.2;">${b.productName}</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:#EDE9FE;color:#6D28D9;">${b.finalBatchNo || '—'}</span>
-          <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
-          <span style="font-size:10px;color:#9CA3AF;">ID: ${b.id}</span>
+      <!-- Product Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:22px;font-weight:900;color:#0F172A;line-height:1.2;margin-bottom:6px;">${b.productName}</div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;">
+            <span style="background:#EDE9FE;color:#6D28D9;font-size:11px;font-weight:700;padding:3px 11px;border-radius:7px;">${b.finalBatchNo || '—'}</span>
+            <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
+            <span style="font-size:10px;color:#94A3B8;font-family:monospace;">ID: ${b.id}</span>
+          </div>
         </div>
+        <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;">
+          ✏️ Edit
+        </button>
       </div>
-      <button class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;margin-left:10px;" onclick="openEditModal('${b.id}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Edit
-      </button>
-    </div>
 
-    <!-- ══ STEP 1: PROCUREMENT ══ -->
-    ${card(
-      cardHead('📋', 'Procurement & Supplier', 'Invoice · Origin · Lot traceability', '#EFF6FF', '#1D4ED8')
-      + body(
-          kv('Supplier Name',    `<strong style="font-size:13px;color:#111827;">${b.supplierName || '—'}</strong>`)
-        + kv('Supplier GSTIN',   b.supplierGSTIN || '—')
-        + kv('Supplier FSSAI',   b.supplierFSSAI || '—')
-        + kv('Supplier Address', b.supplierAddress || '—')
-        + kv('Invoice No.',      `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
-        + kv('Supplier Batch/Lot', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;font-size:11px;">${b.supplierBatch || 'NIL'}</code>`)
-        + kv('Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
-        + kv('Raw Purchase Qty', `<span style="font-size:14px;font-weight:800;color:#111827;">${purchaseQty} kg</span>`)
-      ),
-    'margin-bottom:12px;')}
+      <!-- Step 1: PROCUREMENT -->
+      ${section('#EFF6FF', '📋', 'STEP 1 — Procurement & Supplier',
+          row('🏢', 'Supplier Name',    `<strong style="font-size:13px;">${b.supplierName || '—'}</strong>`)
+        + row('🔢', 'Supplier GSTIN',   b.supplierGSTIN || '—')
+        + row('🍽️', 'Supplier FSSAI',   b.supplierFSSAI || '—')
+        + row('📍', 'Supplier Address', b.supplierAddress || '—')
+        + row('🏷️', 'Supplier Lot/Batch', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;">${b.supplierBatch || 'NIL'}</code>`)
+        + row('📄', 'Invoice No.',      `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
+        + row('📅', 'Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
+        + row('⚖️', 'Raw Purchase Qty', `<strong style="font-size:15px;">${purchaseQty} kg</strong>`, 'color:#0F172A;')
+      )}
 
-    <!-- ══ STEP 2: PROCESSING ══ -->
-    ${card(
-      cardHead('⚙️', 'Processing', 'Grinding · Blending · Ingredients added', '#FFFBEB', '#B45309')
-      + body(
-          kv('Processing Type',
-            `<span style="background:${procBg};color:${procColor};border:1.5px solid ${procColor}33;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;">${procLabel}</span>`)
-        + (b.processingDone === 'Yes' ? kv('Post-Process Challan', b.challanNo || '—') : '')
-        + `<div style="padding:7px 0;border-bottom:1px solid #F3F4F6;">
-             <div style="font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Extra Ingredients Added</div>
-             <div style="display:flex;flex-wrap:wrap;gap:0;">${ingChips}</div>
-           </div>`
+      <!-- Step 2: PROCESSING -->
+      ${section('#FFFBEB', '⚙️', 'STEP 2 — Processing',
+          chipRow('🔧', 'Processing Type', procLabel)
+        + (b.processingDone === 'Yes' ? row('📑', 'Post-Proc. Challan', b.challanNo || '—') : '')
+        + chipRow('🌿', 'Extra Ingredients', ingChipHtml)
         + (b.processingDone === 'Yes'
-          ? kv('Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#9CA3AF;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
-          : '')
-        + (b.processingDone === 'Yes' && procType === 'factory' && shortage > 0
-          ? `<div style="margin:8px 0;background:linear-gradient(135deg,#FEF2F2 0%,#FFF5F5 100%);border:2px solid #FECACA;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
-               <span style="font-size:22px;">⚠️</span>
-               <div>
-                 <div style="font-size:10px;font-weight:700;color:#991B1B;text-transform:uppercase;letter-spacing:.5px;">Grinding Loss / Shortage</div>
-                 <div style="font-size:20px;font-weight:900;color:#DC2626;line-height:1.1;">−${shortage} kg</div>
-                 <div style="font-size:10px;color:#B91C1C;">${purchaseQty} kg in → ${netWt} kg out</div>
-               </div>
-             </div>`
-          : (procType === 'blend' ? kv('Blending Loss', '<span style="color:#059669;font-weight:700;">NIL — no loss in blending</span>') : ''))
-        + kv('Net Weight (Output)', `<span style="font-size:15px;font-weight:900;color:#059669;">${netWt} kg</span>`)
-      ),
-    'margin-bottom:12px;')}
+            ? row('📥', 'Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#9CA3AF;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
+            : '')
+        + shortageBlock
+        + row('📤', 'Net Weight (Output)', `<strong style="font-size:16px;color:${shortage > 0 ? '#DC2626' : '#059669'};">${netWt} kg</strong>`)
+      )}
 
-    <!-- ══ STEP 3: STORAGE & PACKAGING ══ -->
-    ${card(
-      cardHead('📦', 'Storage & Packaging', 'Location breakdown · Package count', '#ECFDF5', '#065F46')
-      + body(
-          `<div style="padding:7px 0;border-bottom:1px solid #F3F4F6;">
-             <div style="font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Storage Breakdown</div>
-             <div style="display:flex;flex-wrap:wrap;">${storageChips}</div>
+      <!-- Step 3: STORAGE & PACKAGING -->
+      ${section('#ECFDF5', '📦', 'STEP 3 — Storage & Packaging',
+          chipRow('🗄️', 'Storage Breakdown', storageChipHtml)
+        + row('📅', 'Repacking Date',         b.repackingDate || '—')
+        + row('🧮', 'Total Finished Qty',      `<strong style="font-size:15px;">${finishedQty} kg</strong>`)
+        + row('📦', 'No. of Packages',         packageCount ? `<strong>${packageCount}</strong> packages` : '—')
+      )}
+
+      <!-- Step 4: DISPATCH & COMPLIANCE -->
+      ${section(isRecallOpen ? '#FEF2F2' : '#F5F3FF', isRecallOpen ? '🚨' : '🚚', 'STEP 4 — Dispatch & Compliance',
+          `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0 14px;">
+             <div style="background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F9FAFB'};border-radius:12px;padding:14px 16px;text-align:center;border:1.5px solid ${bal > 0 ? '#BBF7D0' : bal < 0 ? '#FECACA' : '#E5E7EB'};">
+               <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Balance Stock</div>
+               <div style="font-size:28px;font-weight:900;color:${bal > 0 ? '#059669' : bal < 0 ? '#DC2626' : '#6B7280'};line-height:1;">${bal} kg</div>
+             </div>
+             <div style="background:#F0F9FF;border-radius:12px;padding:14px 16px;text-align:center;border:1.5px solid #BAE6FD;">
+               <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Dispatched</div>
+               <div style="font-size:28px;font-weight:900;color:${dispatchQty > 0 ? '#0369A1' : '#9CA3AF'};line-height:1;">${dispatchQty} kg</div>
+             </div>
            </div>`
-        + kv('Repacking / Processing Date', b.repackingDate || '—')
-        + kv('Total Packed / Finished Qty', `<span style="font-size:14px;font-weight:800;color:#111827;">${finishedQty} kg</span>`)
-        + kv('No. of Packages Made', packageCount ? `<strong style="font-size:14px;">${packageCount}</strong> <span style="color:#6B7280;">packages</span>` : '—')
-      ),
-    'margin-bottom:12px;')}
-
-    <!-- ══ STEP 4: DISPATCH & COMPLIANCE ══ -->
-    ${card(
-      cardHead(isRecallOpen ? '🚨' : '🚚', 'Dispatch & Compliance', 'Outward · Balance · Recall status', isRecallOpen ? '#FEF2F2' : '#F5F3FF', isRecallOpen ? '#991B1B' : '#5B21B6')
-      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #F3F4F6;">
-           <div style="padding:12px 16px;border-right:1px solid #F3F4F6;text-align:center;background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F9FAFB'};">
-             <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Balance Stock</div>
-             <div style="font-size:24px;font-weight:900;color:${bal > 0 ? '#059669' : bal < 0 ? '#DC2626' : '#6B7280'};">${bal} kg</div>
-           </div>
-           <div style="padding:12px 16px;text-align:center;">
-             <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Dispatched</div>
-             <div style="font-size:24px;font-weight:900;color:${dispatchQty > 0 ? '#1D4ED8' : '#9CA3AF'};">${dispatchQty} kg</div>
-           </div>
-         </div>`
-      + body(
-          kv('Dispatch Date',         dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#9CA3AF;">Not dispatched yet</span>')
-        + kv('Invoice / Dispatch Ref.', b.invoiceRef || '—')
-        + `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F3F4F6;align-items:center;">
-             <span style="width:140px;flex-shrink:0;font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;">Recall Status</span>
+        + row('📅', 'Dispatch Date',        dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#9CA3AF;">Not dispatched yet</span>')
+        + row('🧾', 'Invoice / Dispatch Ref', b.invoiceRef || '—')
+        + `<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
+             <span style="font-size:14px;width:20px;text-align:center;">🔔</span>
+             <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;">Recall Status</span>
              <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
            </div>`
-        + kv('Complaint / Notes',    b.complaint && b.complaint !== 'None' ? `<span style="color:#DC2626;">${b.complaint}</span>` : '<span style="color:#9CA3AF;">None</span>')
-        + kv('Action Taken',         b.actionTaken || '—')
-        + kv('Verified By',          `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
-      ),
-    'margin-bottom:4px;')}
+        + row('💬', 'Complaint / Notes',    b.complaint && b.complaint !== 'None'
+              ? `<span style="color:#DC2626;font-weight:600;">${b.complaint}</span>`
+              : '<span style="color:#9CA3AF;">None</span>')
+        + row('✅', 'Action Taken',         b.actionTaken || '—')
+        + row('👤', 'Verified By',          `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
+      )}
 
-  </div>`;
+    </div>`;
+
+  const modal = document.getElementById('batch-detail-modal');
+  modal.style.display = 'block';
+  modal.scrollTop = 0;
+  document.body.style.overflow = 'hidden';
 };
+
+
+
+
 
 
 
@@ -1457,4 +1457,10 @@ window.closeSidebar = function() {
   document.getElementById('overlay').classList.remove('show');
 };
 
+// Escape key closes batch detail modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeBatchModal(); }
+});
+
 init();
+
