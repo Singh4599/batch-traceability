@@ -563,31 +563,42 @@ window.onProcTypeChange = function(type) {
 
 window.recalcNetWeight = function() {
   const rows = document.querySelectorAll('#ingredient-rows .ingredient-row');
-  let total = 0;
-  rows.forEach(r => { total += Number(r.querySelector('.ing-weight')?.value) || 0; });
+  let ingTotal = 0;
+  rows.forEach(r => { ingTotal += Number(r.querySelector('.ing-weight')?.value) || 0; });
 
-  const procType  = document.querySelector('input[name="proc-type"]:checked')?.value || '';
+  const procType   = document.querySelector('input[name="proc-type"]:checked')?.value || '';
   const processing = document.getElementById('n-processing')?.value;
   const purchaseQty = Number(document.getElementById('n-qty')?.value) || 0;
-  const nwEl = document.getElementById('n-net-weight');
+  const nwEl    = document.getElementById('n-net-weight');
   const totalEl = document.getElementById('ingredients-total');
 
   if (processing !== 'Yes' || !procType) {
-    // No processing — net weight = purchase qty
+    // No processing — net weight = purchase qty directly
     if (nwEl && purchaseQty > 0) nwEl.value = purchaseQty;
     if (totalEl) totalEl.textContent = '';
   } else {
+    // Processing — total = purchased product + extra ingredients added
+    const combined = +(purchaseQty + ingTotal).toFixed(3);
     const shortPct = procType === 'factory'
       ? Number(document.getElementById('factory-shortage-pct')?.value) || 9
       : 0;
-    const netWt = +(total * (1 - shortPct / 100)).toFixed(3);
-    if (nwEl && total > 0) nwEl.value = netWt;
+    const netWt = +(combined * (1 - shortPct / 100)).toFixed(3);
+
+    if (nwEl && combined > 0) nwEl.value = netWt;
+
     if (totalEl) {
-      if (total === 0) { totalEl.textContent = ''; }
-      else if (procType === 'factory') {
-        totalEl.innerHTML = 'Total in: <strong>' + total + ' kg</strong> &rarr; After <strong>' + shortPct + '%</strong> loss: <strong style="color:#4338CA">' + netWt + ' kg</strong>';
+      if (combined === 0) {
+        totalEl.textContent = '';
+      } else if (procType === 'factory') {
+        totalEl.innerHTML =
+          '<strong>' + purchaseQty + ' kg</strong> (purchase)' +
+          (ingTotal > 0 ? ' + <strong>' + ingTotal + ' kg</strong> (ingredients)' : '') +
+          ' = <strong>' + combined + ' kg</strong> &rarr; After <strong>' + shortPct + '%</strong> loss: <strong style="color:#4338CA">' + netWt + ' kg</strong>';
       } else {
-        totalEl.innerHTML = 'Total: <strong style="color:#166534">' + total + ' kg</strong> (no loss — Net Wt = ' + total + ' kg)';
+        totalEl.innerHTML =
+          '<strong>' + purchaseQty + ' kg</strong> (purchase)' +
+          (ingTotal > 0 ? ' + <strong>' + ingTotal + ' kg</strong> (ingredients)' : '') +
+          ' = <strong style="color:#166534">' + combined + ' kg</strong> (no grinding loss)';
       }
     }
   }
