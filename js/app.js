@@ -395,7 +395,7 @@ window.openBatch = function(id) {
     ? `<div style="margin:10px 0 4px;background:linear-gradient(135deg,#FFF1F2,#FEF2F2);border:2px solid #FECDD3;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px;">
          <div style="font-size:28px;">⚠️</div>
          <div>
-           <div style="font-size:10px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Grinding Loss / Shortage</div>
+           <div style="font-size:10px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Shortage</div>
            <div style="font-size:26px;font-weight:900;color:#DC2626;line-height:1;">−${shortage} kg</div>
            <div style="font-size:11px;color:#9F1239;margin-top:2px;">${purchaseQty} kg in → ${netWt} kg net output</div>
          </div>
@@ -414,9 +414,10 @@ window.openBatch = function(id) {
             <span style="font-size:10px;color:#94A3B8;font-family:monospace;">ID: ${b.id}</span>
           </div>
         </div>
-        <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;">
-          ✏️ Edit
-        </button>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:7px 12px;font-size:11px;">✏️ Edit</button>
+          <button onclick="deleteBatch('${b.id}')" style="padding:7px 12px;font-size:11px;background:#FEF2F2;color:#DC2626;border:1.5px solid #FECACA;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:5px;"><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='12' height='12'><polyline points='3 6 5 6 21 6'/><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'/><path d='M10 11v6'/><path d='M14 11v6'/><path d='M9 6V4h6v2'/></svg>Delete</button>
+        </div>
       </div>
 
       <!-- Step 1: PROCUREMENT -->
@@ -444,12 +445,41 @@ window.openBatch = function(id) {
       )}
 
       <!-- Step 3: STORAGE & PACKAGING -->
-      ${section('#ECFDF5', '📦', 'STEP 3 — Storage & Packaging',
-          chipRow('🗄️', 'Storage Breakdown', storageChipHtml)
-        + row('📅', 'Repacking Date',         b.repackingDate || '—')
-        + row('🧮', 'Total Finished Qty',      `<strong style="font-size:15px;">${finishedQty} kg</strong>`)
-        + row('📦', 'No. of Packages',         packageCount ? `<strong>${packageCount}</strong> packages` : '—')
-      )}
+      ${(()=>{
+        const packedQty   = finishedQty;
+        const unpackedQty = Math.max(0, +(netWt - finishedQty).toFixed(3));
+        const packPct     = netWt > 0 ? Math.min(100, Math.round((packedQty / netWt) * 100)) : 0;
+        const repackProgress = `
+          <div style="margin:8px 0 12px;background:#F0F4FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:12px 14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+              <span style="font-size:11px;font-weight:700;color:#3730A3;text-transform:uppercase;letter-spacing:.4px;">📦 Repacking Status</span>
+              <span style="font-size:11px;color:#6366F1;font-weight:800;">${packPct}% Packed</span>
+            </div>
+            <div style="background:#C7D2FE;border-radius:20px;height:7px;overflow:hidden;margin-bottom:10px;">
+              <div style="background:linear-gradient(90deg,#4F46E5,#818CF8);height:100%;width:${packPct}%;border-radius:20px;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+              <div style="background:#fff;border-radius:8px;padding:8px 4px;border:1px solid #DDE3FF;">
+                <div style="font-size:9px;color:#6B7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Net Output</div>
+                <div style="font-size:16px;font-weight:900;color:#0F172A;">${netWt} kg</div>
+              </div>
+              <div style="background:#F0FDF4;border-radius:8px;padding:8px 4px;border:1px solid #86EFAC;">
+                <div style="font-size:9px;color:#15803D;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Packed ✓</div>
+                <div style="font-size:16px;font-weight:900;color:#059669;">${packedQty} kg</div>
+              </div>
+              <div style="background:${unpackedQty > 0 ? '#FEFCE8' : '#F9FAFB'};border-radius:8px;padding:8px 4px;border:1px solid ${unpackedQty > 0 ? '#FDE047' : '#E5E7EB'};">
+                <div style="font-size:9px;color:${unpackedQty > 0 ? '#854D0E' : '#6B7280'};font-weight:700;text-transform:uppercase;margin-bottom:3px;">Remaining</div>
+                <div style="font-size:16px;font-weight:900;color:${unpackedQty > 0 ? '#CA8A04' : '#9CA3AF'};">${unpackedQty} kg</div>
+              </div>
+            </div>
+            ${packageCount ? `<div style="text-align:center;margin-top:8px;font-size:11px;color:#4338CA;font-weight:700;">🏷️ ${packageCount} packages made</div>` : ''}
+          </div>`;
+        return section('#ECFDF5', '📦', 'STEP 3 — Storage & Packaging',
+            repackProgress
+          + chipRow('🗄️', 'Storage Breakdown', storageChipHtml)
+          + row('📅', 'Repacking Date', b.repackingDate || '—')
+        );
+      })()}
 
       <!-- Step 4: DISPATCH & COMPLIANCE -->
       ${section(isRecallOpen ? '#FEF2F2' : '#F5F3FF', isRecallOpen ? '🚨' : '🚚', 'STEP 4 — Dispatch & Compliance',
@@ -1364,7 +1394,7 @@ window.exportExcel = function() {
     // Processing
     'Processing Done', 'Processing Type',
     'Extra Ingredients & Batches', 'Total Input Weight (kg)',
-    'Grinding / Blend Loss (kg)', 'Net Weight After Processing (kg)',
+    'Shortage (kg)', 'Net Weight After Processing (kg)',
     'Post-Process Challan No.',
     // Storage & Packaging
     'Repacking / Processing Date', 'Storage Location (Breakdown)',
@@ -1461,6 +1491,24 @@ window.closeSidebar = function() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeBatchModal(); }
 });
+
+// ── DELETE BATCH ─────────────────────────────────────────────────────────────
+window.deleteBatch = async function(id) {
+  if (!confirm('⚠️  Permanently delete this batch record?\n\nThis cannot be undone.')) return;
+  const ok = await deleteBatchDoc(id);
+  if (ok) {
+    allBatches = allBatches.filter(b => b.id !== id);
+    allBatches.forEach((b, i) => { b.srNo = i + 1; });
+    saveLocal(allBatches);
+    filteredBatches = [...allBatches];
+    renderStats();
+    renderTable();
+    closeBatchModal();
+    showToast('✅ Batch deleted successfully.');
+  } else {
+    showToast('❌ Delete failed — check your connection.');
+  }
+};
 
 init();
 
