@@ -327,12 +327,68 @@ window.openBatch = function(id) {
   if (!det) return;
 
   const isRecallOpen = b.recallStatus === 'Open' || b.recallStatus === 'Under Investigation';
-  const bal = Number(b.balanceStock) || 0;
+  const inwardQty    = b.netWeight ?? b.purchaseQty ?? 0;
+  const finishedQty  = b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0;
+  const bal          = Number(b.balanceStock) || 0;
+  const procType     = b.processingType || '—';
+  const shortage     = Number(b.blendShortage) || 0;
+  const packageCount = b.pkgCount || b.packageCount || '—';
+
+  // Build processing detail string
+  let procDetail = '—';
+  if (b.processingDone === 'Yes') {
+    if (procType === 'factory') {
+      const lossKg = +(inwardQty - (b.netWeight || inwardQty)).toFixed(3);
+      procDetail = `🏭 Factory (Grinding) — Loss: ${shortage > 0 ? shortage : lossKg} kg`;
+    } else if (procType === 'blend') {
+      procDetail = `🌀 Blend — No grinding loss`;
+    } else {
+      procDetail = `✅ Processed (${procType})`;
+    }
+  } else {
+    procDetail = '⬜ No Processing — Direct to Storage';
+  }
+
+  // Build storage breakdown string
+  let storageBreakdown = '—';
+  if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
+    storageBreakdown = b.storageAllocation
+      .map(a => `${a.location}${a.qty ? ': <strong>' + a.qty + ' kg</strong>' : ''}`)
+      .join(' &nbsp;|&nbsp; ');
+  } else if (b.storageLocation && b.storageLocation !== '—') {
+    storageBreakdown = b.storageLocation;
+  }
+
+  // Build ingredients string
+  const ingList = Array.isArray(b.ingredients) && b.ingredients.length
+    ? b.ingredients.map(i => `<span style="display:inline-block;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px;color:#166534;"><strong>${i.name}</strong>${i.batch && i.batch !== 'NIL' ? ' · Lot: '+i.batch : ''} · ${i.weight} kg</span>`).join('')
+    : (b.otherIngredients && b.otherIngredients !== '—' ? `<span style="font-size:11px;color:#166534;">${b.otherIngredients}</span>` : '<span style="color:#94A3B8;font-size:11px;">None</span>');
+
+  // Journey step builder
+  const jStep = (num, color, icon, title, rows) => {
+    const rowsHtml = rows.map(([label, val]) =>
+      `<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid #F1F5F9;">
+        <span style="min-width:145px;font-size:11px;color:#64748B;font-weight:600;">${label}</span>
+        <span style="font-size:12px;color:#0F172A;font-weight:500;flex:1;">${val}</span>
+      </div>`
+    ).join('');
+    return `
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">${icon}</div>
+        <div style="width:2px;background:#E2E8F0;flex:1;margin-top:4px;"></div>
+      </div>
+      <div style="flex:1;background:#FAFBFC;border:1px solid #E8EDF2;border-radius:10px;padding:10px 14px;margin-bottom:0;">
+        <div style="font-size:11px;font-weight:800;color:#475569;letter-spacing:0.5px;margin-bottom:8px;">${num}. ${title}</div>
+        ${rowsHtml}
+      </div>
+    </div>`;
+  };
 
   det.innerHTML = `
     <div class="meta-rows-container">
-      <!-- Title strip with quick Edit button -->
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 6px;">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 12px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <h3 style="font-size:15px;font-weight:800;color:var(--text-primary);">${b.productName}</h3>
           <span style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--brand-subtle);color:var(--brand-primary);">${b.finalBatchNo || '—'}</span>
@@ -344,34 +400,51 @@ window.openBatch = function(id) {
         </button>
       </div>
 
-      <div class="meta-row-4">
-        ${metaCard('BATCH ID', b.id, 'icon-box-red', `<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>`, 'value-brand')}
-        ${metaCard('PRODUCT', b.productName, 'icon-box-orange', `<path d="M16.5 9.4 7.55 4.24a1.79 1.79 0 0 0-1.8 0l-1.9 1.1A1.8 1.8 0 0 0 3 6.91V17.1a1.8 1.8 0 0 0 .85 1.57l1.9 1.1a1.8 1.8 0 0 0 1.8 0l8.95-5.16a1.8 1.8 0 0 0 .85-1.57V6.91a1.8 1.8 0 0 0-.85-1.57Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/>`)}
-        ${metaCard('FINAL BATCH NO.', b.finalBatchNo || '—', 'icon-box-green', `<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>`)}
-        ${metaCard('PURCHASE DATE', b.displayPurchaseDate || formatDate(b.purchaseDate), 'icon-box-blue', `<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`)}
-      </div>
+      <!-- Journey Timeline -->
+      <div style="padding:4px 2px;">
 
-      <div class="meta-row-6">
-        ${metaCard('INVOICE NO.', b.invoiceNo || '—', 'icon-box-blue', `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`)}
-        ${metaCard('SUPPLIER', b.supplierName || '—', 'icon-box-red', `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`)}
-        ${metaCard('SUPPLIER BATCH', b.supplierBatch || '—', 'icon-box-red', `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`)}
-        ${metaCard('INWARD QTY', (b.netWeight ?? b.purchaseQty ?? 0) + ' kg', 'icon-box-orange', `<path d="M6 3h12l4 6-10 12L2 9l4-6z"/>`)}
-        ${metaCard('PROCESSING DONE', b.processingDone || 'No', 'icon-box-orange', `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`)}
-        ${metaCard('STORAGE', b.storageLocation || '—', 'icon-box-green', `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`)}
-      </div>
+        ${jStep(1, '#DBEAFE', '📋', 'PROCUREMENT — Invoice & Supplier', [
+          ['Batch ID',            b.id],
+          ['Purchase Date',       b.displayPurchaseDate || formatDate(b.purchaseDate)],
+          ['Invoice No.',         b.invoiceNo || '—'],
+          ['Supplier Name',       b.supplierName || '—'],
+          ['Supplier GSTIN',      b.supplierGSTIN || '—'],
+          ['Supplier FSSAI',      b.supplierFSSAI || '—'],
+          ['Supplier Address',    b.supplierAddress || '—'],
+          ['Supplier Batch/Lot',  b.supplierBatch || 'NIL'],
+          ['Purchase Qty (Raw)',  (b.purchaseQty || 0) + ' kg'],
+        ])}
 
-      <div class="meta-row-4">
-        ${metaCard('PACKED / FINISHED', (b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0) + ' kg', 'icon-box-green', `<rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>`)}
-        ${metaCard('DISPATCH QTY', (b.dispatchQty || 0) + ' kg', 'icon-box-orange', `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`)}
-        ${metaCard('DISPATCH DATE', b.dispatchDate || '—', 'icon-box-blue', `<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`)}
-        ${metaCard('BALANCE STOCK', bal + ' kg', 'icon-box-red', `<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>`, 'value-brand')}
-      </div>
+        ${jStep(2, '#FEF9C3', '⚙️', 'PROCESSING', [
+          ['Processing Done',     b.processingDone || 'No'],
+          ['Processing Type',     procType !== '—' ? procType.charAt(0).toUpperCase() + procType.slice(1) : '—'],
+          ['Processing Detail',   procDetail],
+          ['Post-Process Challan',b.challanNo || '—'],
+          ['Extra Ingredients',   ingList || '—'],
+          ['Total Input Wt.',     b.processingDone === 'Yes' ? ((b.purchaseQty || 0) + (Array.isArray(b.ingredients) ? b.ingredients.reduce((s,i)=>s+i.weight,0) : 0)) + ' kg' : '—'],
+          ['Grinding/Blend Loss', b.processingDone === 'Yes' && procType === 'factory' ? (shortage || '—') + (shortage ? ' kg' : '') : (procType === 'blend' ? 'NIL (blend)' : '—')],
+          ['Net Weight (Out)',    (b.netWeight || b.purchaseQty || 0) + ' kg'],
+        ])}
 
-      <div class="other-ingredients-strip">
-        <svg class="strip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
-        <span class="strip-label">Other Ingredients:</span>
-        <span class="strip-value">${b.otherIngredients && b.otherIngredients !== '—' ? b.otherIngredients : '—'}</span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text-muted);">Verified By: <strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong></span>
+        ${jStep(3, '#DCFCE7', '📦', 'STORAGE & PACKAGING', [
+          ['Storage Breakdown',   storageBreakdown],
+          ['Repacking Date',      b.repackingDate || '—'],
+          ['Total Packed/Finished QTY', finishedQty + ' kg'],
+          ['No. of Packages',    packageCount],
+          ['Unpackaged Remaining', finishedQty && packageCount && packageCount !== '—' ? '(see storage breakdown)' : '—'],
+        ])}
+
+        ${jStep(4, '#FEE2E2', '🚚', 'DISPATCH', [
+          ['Dispatch Date',       b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : 'Not Dispatched'],
+          ['Dispatch Qty',        b.dispatchQty && b.dispatchQty !== '—' ? b.dispatchQty + ' kg' : '0 kg'],
+          ['Invoice / Dispatch Ref', b.invoiceRef || '—'],
+          ['Balance Stock',       `<strong style="color:${bal < 0 ? '#DC2626' : '#16A34A'};">${bal} kg</strong>`],
+          ['Recall Status',       `<span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>`],
+          ['Complaint / Notes',   b.complaint && b.complaint !== 'None' ? b.complaint : 'None'],
+          ['Action Taken',        b.actionTaken || '—'],
+          ['Verified By',         b.verifiedBy || 'Bhimlal Sharma'],
+        ])}
+
       </div>
     </div>`;
 };
@@ -1235,47 +1308,93 @@ window.exportExcel = function() {
     return;
   }
   const wb = XLSX.utils.book_new();
+
   const headers = [
-    'Sr.', 'Purchase Date', 'Product Name', 'Supplier Name', 'Supplier Batch', 'Invoice No.',
-    'Purchase Qty (kg)', 'Processing Done', 'Other Ingredients & Batches',
-    'Final Batch No.', 'Repacking Date', 'Storage Location', 'Total Finished Qty (kg)',
-    'Dispatch Date', 'Dispatch Qty (kg)', 'Invoice/Dispatch Ref', 'Balance Stock (kg)',
-    'Complaint/Recall Details', 'Action Taken', 'Recall Status', 'Verified By'
+    // Identification
+    'Sr.', 'Batch ID', 'Final Batch No.',
+    // Procurement
+    'Purchase Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Supplier FSSAI',
+    'Supplier Address', 'Supplier Batch / Lot No.', 'Purchase Qty (kg)',
+    // Processing
+    'Processing Done', 'Processing Type',
+    'Extra Ingredients & Batches', 'Total Input Weight (kg)',
+    'Grinding / Blend Loss (kg)', 'Net Weight After Processing (kg)',
+    'Post-Process Challan No.',
+    // Storage & Packaging
+    'Repacking / Processing Date', 'Storage Location (Breakdown)',
+    'Total Packed / Finished Qty (kg)', 'No. of Packages',
+    // Dispatch
+    'Dispatch Date', 'Dispatch Qty (kg)', 'Invoice / Dispatch Ref.',
+    'Balance Stock (kg)',
+    // QC / Recall
+    'Complaint / Notes', 'Action Taken', 'Recall Status', 'Verified By'
   ];
 
   const rows = [
     headers,
-    ...allBatches.map(b => [
-      b.srNo,
-      b.displayPurchaseDate || formatDate(b.purchaseDate),
-      b.productName,
-      b.supplierName,
-      b.supplierBatch,
-      b.invoiceNo,
-      b.purchaseQty,
-      b.processingDone,
-      b.otherIngredients,
-      b.finalBatchNo,
-      b.repackingDate,
-      b.storageLocation,
-      b.totalFinishedQty,
-      b.dispatchDate,
-      b.dispatchQty,
-      b.invoiceRef,
-      b.balanceStock,
-      b.complaint,
-      b.actionTaken,
-      b.recallStatus,
-      b.verifiedBy
-    ])
+    ...allBatches.map(b => {
+      const inwardQty = b.netWeight ?? b.purchaseQty ?? 0;
+      const ingArr    = Array.isArray(b.ingredients) ? b.ingredients : [];
+      const ingTotal  = ingArr.reduce((s, i) => s + (i.weight || 0), 0);
+      const totalIn   = (b.purchaseQty || 0) + ingTotal;
+      const loss      = Number(b.blendShortage) || 0;
+      const ingText   = ingArr.length
+        ? ingArr.map(i => `${i.name} (Lot:${i.batch||'NIL'}) ${i.weight}kg`).join('; ')
+        : (b.otherIngredients && b.otherIngredients !== '—' ? b.otherIngredients : 'NIL');
+      const storageStr = Array.isArray(b.storageAllocation) && b.storageAllocation.length
+        ? b.storageAllocation.map(a => `${a.location}${a.qty ? '('+a.qty+'kg)' : ''}`).join(' | ')
+        : (b.storageLocation || '—');
+      const finQty = b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0;
+
+      return [
+        b.srNo,
+        b.id,
+        b.finalBatchNo || '—',
+        b.displayPurchaseDate || formatDate(b.purchaseDate),
+        b.invoiceNo || '—',
+        b.supplierName || '—',
+        b.supplierGSTIN || '—',
+        b.supplierFSSAI || '—',
+        b.supplierAddress || '—',
+        b.supplierBatch || 'NIL',
+        b.purchaseQty || 0,
+        b.processingDone || 'No',
+        b.processingType || '—',
+        ingText,
+        b.processingDone === 'Yes' ? totalIn : (b.purchaseQty || 0),
+        b.processingDone === 'Yes' ? loss : 0,
+        inwardQty,
+        b.challanNo || '—',
+        b.repackingDate || '—',
+        storageStr,
+        finQty,
+        b.pkgCount || b.packageCount || '—',
+        b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : 'Not Dispatched',
+        b.dispatchQty || 0,
+        b.invoiceRef || '—',
+        Number(b.balanceStock) || 0,
+        b.complaint && b.complaint !== 'None' ? b.complaint : 'None',
+        b.actionTaken || '—',
+        b.recallStatus || 'Closed',
+        b.verifiedBy || 'Bhimlal Sharma'
+      ];
+    })
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [
-    { wch: 5 }, { wch: 14 }, { wch: 24 }, { wch: 22 }, { wch: 15 }, { wch: 15 },
-    { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 15 }, { wch: 14 }, { wch: 18 },
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 12 }, { wch: 20 },
-    { wch: 20 }, { wch: 12 }, { wch: 16 }
+    {wch:5},{wch:22},{wch:14},
+    {wch:14},{wch:14},{wch:24},{wch:18},{wch:18},
+    {wch:28},{wch:16},{wch:12},
+    {wch:12},{wch:12},
+    {wch:30},{wch:14},
+    {wch:14},{wch:16},
+    {wch:16},
+    {wch:16},{wch:30},
+    {wch:16},{wch:12},
+    {wch:16},{wch:12},{wch:18},
+    {wch:14},
+    {wch:22},{wch:20},{wch:12},{wch:16}
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Batch Traceability Register');
