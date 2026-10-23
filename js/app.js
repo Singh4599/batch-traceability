@@ -522,9 +522,146 @@ window.onProductInput = function(val) {
 };
 
 window.onProcessingChange = function(val) {
-  const row = document.getElementById('n-ingredients-row');
-  if (row) row.style.display = val === 'Yes' ? '' : 'none';
+  const typeRow = document.getElementById('processing-type-row');
+  if (typeRow) typeRow.style.display = val === 'Yes' ? '' : 'none';
+  if (val !== 'Yes') {
+    // Reset proc type selection
+    document.querySelectorAll('input[name="proc-type"]').forEach(r => r.checked = false);
+    const fw = document.getElementById('factory-ingredients-wrap');
+    const bw = document.getElementById('blend-shortage-wrap');
+    if (fw) fw.style.display = 'none';
+    if (bw) bw.style.display = 'none';
+    document.getElementById('lbl-factory').style.borderColor = '#E2E8F0';
+    document.getElementById('lbl-blend').style.borderColor = '#E2E8F0';
+  }
 };
+
+window.onProcTypeChange = function(type) {
+  const fw = document.getElementById('factory-ingredients-wrap');
+  const bw = document.getElementById('blend-shortage-wrap');
+  const lf = document.getElementById('lbl-factory');
+  const lb = document.getElementById('lbl-blend');
+
+  if (type === 'factory') {
+    if (fw) fw.style.display = '';
+    if (bw) bw.style.display = 'none';
+    lf.style.borderColor = 'var(--brand-primary)';
+    lf.style.background = '#EEF2FF';
+    lb.style.borderColor = '#E2E8F0';
+    lb.style.background = '';
+  } else {
+    if (fw) fw.style.display = 'none';
+    if (bw) bw.style.display = '';
+    lb.style.borderColor = '#F59E0B';
+    lb.style.background = '#FFFBEB';
+    lf.style.borderColor = '#E2E8F0';
+    lf.style.background = '';
+    // Show 9% calculation based on purchase qty
+    updateBlendShortage();
+  }
+};
+
+function updateBlendShortage() {
+  const qty = Number(document.getElementById('n-qty')?.value) || 0;
+  const net = +(qty * 0.91).toFixed(2);
+  const pEl = document.getElementById('blend-purchase-qty');
+  const nEl = document.getElementById('blend-net-qty');
+  if (pEl) pEl.textContent = qty > 0 ? qty + ' kg' : '—';
+  if (nEl) nEl.textContent = net > 0 ? net + ' kg' : '—';
+  // Auto-fill net weight
+  const nw = document.getElementById('n-net-weight');
+  if (nw && !nw.value && net > 0) nw.value = net;
+}
+
+window.addIngredientRow = function() {
+  const container = document.getElementById('ingredient-rows');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.className = 'ingredient-row';
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
+  row.innerHTML = `
+    <input type="text" placeholder="Ingredient name" style="flex:2;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" />
+    <input type="text" placeholder="Batch No." style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" />
+    <input type="number" placeholder="Weight (kg)" style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" />
+    <button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;">✕</button>
+  `;
+  container.appendChild(row);
+};
+
+window.removeIngredientRow = function(btn) {
+  const row = btn.closest('.ingredient-row');
+  const container = document.getElementById('ingredient-rows');
+  if (container && container.querySelectorAll('.ingredient-row').length > 1) {
+    row?.remove();
+  } else {
+    // Clear the last row instead of removing it
+    if (row) {
+      row.querySelectorAll('input').forEach(i => i.value = '');
+    }
+  }
+};
+
+window.onNetWeightChange = function() {
+  onStorageQtyChange();
+};
+
+window.onStorageCheck = function() {
+  ['dry','cold','shop'].forEach(key => {
+    const cb = document.getElementById(`store-${key}`);
+    const qtyEl = document.getElementById(`store-${key}-qty`);
+    const roomEl = document.getElementById(`store-${key}-room`);
+    if (!cb || !qtyEl) return;
+    const enabled = cb.checked;
+    qtyEl.disabled = !enabled;
+    if (roomEl) roomEl.disabled = !enabled;
+    if (!enabled) qtyEl.value = '';
+  });
+  onStorageQtyChange();
+};
+
+window.onStorageQtyChange = function() {
+  const netWt = Number(document.getElementById('n-net-weight')?.value) || Number(document.getElementById('n-qty')?.value) || 0;
+  const dryQ  = Number(document.getElementById('store-dry')?.checked  ? document.getElementById('store-dry-qty')?.value  : 0) || 0;
+  const coldQ = Number(document.getElementById('store-cold')?.checked ? document.getElementById('store-cold-qty')?.value : 0) || 0;
+  const shopQ = Number(document.getElementById('store-shop')?.checked ? document.getElementById('store-shop-qty')?.value : 0) || 0;
+  const allocated = +(dryQ + coldQ + shopQ).toFixed(2);
+  const remaining  = +(netWt - allocated).toFixed(2);
+  const hint = document.getElementById('storage-balance-hint');
+  if (!hint) return;
+  if (netWt === 0) { hint.textContent = ''; return; }
+  const color = remaining < 0 ? '#EF4444' : remaining === 0 ? '#059669' : '#D97706';
+  hint.innerHTML = `Allocated: <strong>${allocated} kg</strong> &nbsp;|&nbsp; Net Weight: <strong>${netWt} kg</strong> &nbsp;|&nbsp; Remaining: <strong style="color:${color}">${remaining} kg</strong>`;
+};
+
+function collectIngredients() {
+  const rows = document.querySelectorAll('#ingredient-rows .ingredient-row');
+  const list = [];
+  rows.forEach(row => {
+    const name  = row.querySelector('.ing-name')?.value.trim();
+    const batch = row.querySelector('.ing-batch')?.value.trim();
+    const wt    = Number(row.querySelector('.ing-weight')?.value) || 0;
+    if (name) list.push({ name, batch: batch || '—', weight: wt });
+  });
+  return list;
+}
+
+function getStorageAllocation() {
+  const alloc = [];
+  if (document.getElementById('store-dry')?.checked) {
+    const room = document.getElementById('store-dry-room')?.value || 'Dry Storage Room A';
+    const qty  = Number(document.getElementById('store-dry-qty')?.value) || 0;
+    alloc.push({ location: room, qty });
+  }
+  if (document.getElementById('store-cold')?.checked) {
+    const qty = Number(document.getElementById('store-cold-qty')?.value) || 0;
+    alloc.push({ location: 'Cold Storage', qty });
+  }
+  if (document.getElementById('store-shop')?.checked) {
+    const qty = Number(document.getElementById('store-shop-qty')?.value) || 0;
+    alloc.push({ location: 'Shop / Retail', qty });
+  }
+  return alloc;
+}
 
 // ── GEMINI AI OCR SCANNING ───────────────────────────────────────────────────
 window.onOCRFileSelected = async function(input) {
@@ -550,8 +687,12 @@ window.onOCRFileSelected = async function(input) {
   if (ok && data) {
     // Populate header details
     if (data.purchase_date) document.getElementById('n-purchase-date').value = data.purchase_date;
-    if (data.invoice_no) document.getElementById('n-invoice').value = data.invoice_no;
+    if (data.invoice_no)    document.getElementById('n-invoice').value = data.invoice_no;
+    if (data.challan_no)    { const el = document.getElementById('n-challan'); if(el) el.value = data.challan_no; }
     if (data.supplier_name) document.getElementById('n-supplier').value = data.supplier_name;
+    if (data.gstin)         { const el = document.getElementById('n-supplier-gstin'); if(el) el.value = data.gstin; }
+    if (data.fssai_no)      { const el = document.getElementById('n-supplier-fssai'); if(el) el.value = data.fssai_no; }
+    if (data.supplier_address) { const el = document.getElementById('n-supplier-address'); if(el) el.value = data.supplier_address; }
 
     currentOcrItems = items || [];
 
@@ -791,21 +932,42 @@ window.updateBalancePreview = function() {
 
 // ── SAVE NEW BATCH ───────────────────────────────────────────────────────────
 window.saveNewBatch = async function() {
-  const purchaseDate = document.getElementById('n-purchase-date').value;
-  const productName = document.getElementById('n-product').value.trim();
-  const supplierName = document.getElementById('n-supplier').value.trim();
-  const invoiceNo = document.getElementById('n-invoice').value.trim();
+  const purchaseDate  = document.getElementById('n-purchase-date').value;
+  const productName   = document.getElementById('n-product').value.trim();
+  const supplierName  = document.getElementById('n-supplier').value.trim();
+  const invoiceNo     = document.getElementById('n-invoice').value.trim();
+  const challanNo     = document.getElementById('n-challan')?.value.trim() || '';
   const supplierBatch = document.getElementById('n-supplier-batch').value.trim();
-  const purchaseQty = Number(document.getElementById('n-qty').value) || 0;
+  const supplierGSTIN = document.getElementById('n-supplier-gstin')?.value.trim() || '';
+  const supplierFSSAI = document.getElementById('n-supplier-fssai')?.value.trim() || '';
+  const supplierAddr  = document.getElementById('n-supplier-address')?.value.trim() || '';
+  const purchaseQty   = Number(document.getElementById('n-qty').value) || 0;
   const processingDone = document.getElementById('n-processing').value;
-  const otherIngredients = document.getElementById('n-ingredients').value.trim();
-  const finalBatchNo = document.getElementById('n-final-batch').value.trim() || genFinalBatchNo(productName, purchaseDate);
-  const repackDate = document.getElementById('n-repack-date').value;
-  const storageLocation = document.getElementById('n-storage').value;
+  const procType      = document.querySelector('input[name="proc-type"]:checked')?.value || '';
+  const finalBatchNo  = document.getElementById('n-final-batch').value.trim() || genFinalBatchNo(productName, purchaseDate);
+  const repackDate    = document.getElementById('n-repack-date').value;
+  const netWeight     = Number(document.getElementById('n-net-weight')?.value) || purchaseQty;
+  const storageAlloc  = getStorageAllocation();
+  const storageLocation = storageAlloc.length
+    ? storageAlloc.map(a => `${a.location}${a.qty ? ' ('+a.qty+'kg)' : ''}`).join(', ')
+    : 'Unspecified';
   const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || purchaseQty;
-  const dispatchDate = document.getElementById('n-dispatch-date').value;
-  const dispatchQty = Number(document.getElementById('n-dispatch-qty').value) || 0;
-  const invoiceRef = document.getElementById('n-dispatch-ref').value.trim();
+  const dispatchDate  = document.getElementById('n-dispatch-date').value;
+  const dispatchQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
+  const invoiceRef    = document.getElementById('n-dispatch-ref').value.trim();
+
+  // Ingredients (factory mode)
+  const ingredientsList = (processingDone === 'Yes' && procType === 'factory')
+    ? collectIngredients()
+    : [];
+  const otherIngredients = ingredientsList.length
+    ? ingredientsList.map(i => `${i.name} (${i.batch}, ${i.weight}kg)`).join('; ')
+    : (document.getElementById('n-blend-challan')?.value.trim() ? 'Blend — Challan: ' + document.getElementById('n-blend-challan').value.trim() : '—');
+
+  // Blend shortage
+  const blendShortage = (processingDone === 'Yes' && procType === 'blend')
+    ? +(purchaseQty * 0.09).toFixed(2)
+    : 0;
 
   // Balance = Finished Qty (or Purchase Qty) - Dispatch Qty
   const baseQty = totalFinishedQty > 0 ? totalFinishedQty : purchaseQty;
@@ -829,12 +991,21 @@ window.saveNewBatch = async function() {
     supplierName,
     supplierBatch: supplierBatch || '—',
     invoiceNo: invoiceNo || '—',
+    challanNo: challanNo || '—',
+    supplierGSTIN: supplierGSTIN || '—',
+    supplierFSSAI: supplierFSSAI || '—',
+    supplierAddress: supplierAddr || '—',
     purchaseQty,
     processingDone,
-    otherIngredients: otherIngredients || '—',
+    processingType: procType || '—',
+    ingredients: ingredientsList,
+    otherIngredients,
+    blendShortage,
     finalBatchNo,
+    netWeight,
     repackingDate: repackDate ? formatDate(new Date(repackDate + 'T00:00:00')) : formatDate(d),
     storageLocation,
+    storageAllocation: storageAlloc,
     totalFinishedQty,
     dispatchDate: dispatchDate ? formatDate(new Date(dispatchDate + 'T00:00:00')) : '—',
     dispatchQty: dispatchQty || '—',

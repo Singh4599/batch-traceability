@@ -45,34 +45,38 @@
         <!-- OCR SCAN STRIP -->
         <div class="autofill-banner" style="cursor:pointer;" onclick="document.getElementById('ocr-file-input').click()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
-          <span class="autofill-label" id="ocr-scan-label">📷 Scan Purchase Invoice with AI (tap to upload)</span>
+          <span class="autofill-label" id="ocr-scan-label">📷 Scan Purchase Invoice / Challan with AI (tap to upload)</span>
           <input type="file" id="ocr-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onOCRFileSelected(this)">
           <div id="ocr-progress-bar" style="display:none;flex:1;height:4px;background:#E2E8F0;border-radius:2px;overflow:hidden;margin-left:8px;"><div id="ocr-progress-fill" style="height:100%;width:0%;background:var(--brand-primary);transition:width 0.3s;border-radius:2px;"></div></div>
         </div>
-        
-        <!-- Multi-Item Invoice Picker (visible if AI detects multiple items) -->
+
+        <!-- Multi-Item Invoice Picker -->
         <div id="ocr-items-picker" class="ocr-items-picker hidden">
-          <div class="ocr-items-picker-title">
-            <span>📋 Multiple items found in invoice — Click an item to populate:</span>
-          </div>
+          <div class="ocr-items-picker-title"><span>📋 Multiple items found — Click an item to populate:</span></div>
           <div id="ocr-items-chips-wrap"></div>
         </div>
-
         <div id="ocr-thumb-row" style="display:none;margin:8px 0 10px;padding:8px 10px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;align-items:center;gap:10px;">
           <img id="ocr-thumb" style="width:48px;height:48px;object-fit:cover;border-radius:6px;" src="" alt="scan">
           <span id="ocr-thumb-label" style="font-size:11px;color:var(--text-secondary);font-weight:500;"></span>
         </div>
 
+        <!-- Row 1: Date + Invoice + Challan -->
         <div style="display:flex;gap:12px;margin-top:6px;">
-          <div class="form-row" style="flex:1.2">
+          <div class="form-row" style="flex:1">
             <label>Purchase Date *</label>
             <input type="date" id="n-purchase-date" onchange="onDateOrProductChange()" />
           </div>
-          <div class="form-row" style="flex:2">
+          <div class="form-row" style="flex:1.5">
             <label>Invoice / Bill No. *</label>
             <input type="text" id="n-invoice" placeholder="e.g. INV/2026/001" />
           </div>
+          <div class="form-row" style="flex:1.2">
+            <label>Challan No.</label>
+            <input type="text" id="n-challan" placeholder="e.g. CH/2026/042" />
+          </div>
         </div>
+
+        <!-- Row 2: Supplier Name + Batch -->
         <div style="display:flex;gap:12px;margin-top:10px;">
           <div class="form-row" style="flex:2">
             <label>Supplier Name *</label>
@@ -83,6 +87,28 @@
             <input type="text" id="n-supplier-batch" placeholder="e.g. VMW-901" />
           </div>
         </div>
+
+        <!-- Row 3: Supplier GSTIN + FSSAI -->
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:1.5">
+            <label>Supplier GSTIN</label>
+            <input type="text" id="n-supplier-gstin" placeholder="e.g. 07AABCU9603R1ZX" maxlength="15" style="text-transform:uppercase;" />
+          </div>
+          <div class="form-row" style="flex:1.5">
+            <label>Supplier FSSAI No.</label>
+            <input type="text" id="n-supplier-fssai" placeholder="e.g. 10014011000123" maxlength="14" />
+          </div>
+        </div>
+
+        <!-- Row 4: Supplier Address -->
+        <div style="display:flex;gap:12px;margin-top:10px;">
+          <div class="form-row" style="flex:1">
+            <label>Supplier Address</label>
+            <input type="text" id="n-supplier-address" placeholder="e.g. 12, Spice Market, Khari Baoli, Delhi" />
+          </div>
+        </div>
+
+        <!-- Row 5: Product + Qty -->
         <div style="display:flex;gap:12px;margin-top:10px;">
           <div class="form-row" style="flex:2">
             <label>Product / Raw Material Name *</label>
@@ -98,7 +124,9 @@
 
       <!-- ── STEP 1: PROCESSING / BATCH NO ── -->
       <div class="modal-step-panel hidden" id="bpanel-1">
-        <div style="display:flex;gap:12px;">
+
+        <!-- Processing Done toggle -->
+        <div style="display:flex;gap:12px;align-items:flex-start;">
           <div class="form-row" style="flex:1.2">
             <label>Processing Done (Yes/No)</label>
             <select id="n-processing" onchange="onProcessingChange(this.value)">
@@ -107,12 +135,53 @@
             </select>
             <div id="processing-auto-hint" style="font-size:10px;color:var(--accent-green-dark);font-weight:600;margin-top:3px;display:none;">⚡ Mix/Blend masala detected → Auto-set to Yes</div>
           </div>
-          <div class="form-row" style="flex:2" id="n-ingredients-row" style="display:none;">
-            <label>Other Ingredients &amp; Their Batch Nos.</label>
-            <input type="text" id="n-ingredients" placeholder="e.g. Coriander Powder (CP-1026), Salt (ST-1026)" />
+        </div>
+
+        <!-- Factory or Blend toggle — shown only when Processing = Yes -->
+        <div id="processing-type-row" style="display:none;margin-top:12px;padding:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">SELECT PROCESSING TYPE</div>
+          <div style="display:flex;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border-radius:8px;border:2px solid #E2E8F0;font-weight:600;font-size:13px;flex:1;justify-content:center;" id="lbl-factory">
+              <input type="radio" name="proc-type" value="factory" onchange="onProcTypeChange('factory')" style="accent-color:var(--brand-primary);"> 🏭 Factory (Processed Here)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border-radius:8px;border:2px solid #E2E8F0;font-weight:600;font-size:13px;flex:1;justify-content:center;" id="lbl-blend">
+              <input type="radio" name="proc-type" value="blend" onchange="onProcTypeChange('blend')" style="accent-color:var(--brand-primary);"> 🌀 Blend (Pre-Mixed)
+            </label>
+          </div>
+
+          <!-- FACTORY: Ingredients table -->
+          <div id="factory-ingredients-wrap" style="display:none;margin-top:12px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">INGREDIENTS USED</div>
+            <div id="ingredient-rows">
+              <div class="ingredient-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
+                <input type="text" placeholder="Ingredient name" style="flex:2;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" />
+                <input type="text" placeholder="Batch No." style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" />
+                <input type="number" placeholder="Weight (kg)" style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" />
+                <button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;">✕</button>
+              </div>
+            </div>
+            <button type="button" onclick="addIngredientRow()" style="background:#F0FDF4;border:1px solid #86EFAC;color:#166534;border-radius:7px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;margin-top:2px;">+ Add Ingredient</button>
+          </div>
+
+          <!-- BLEND: 9% shortage notice -->
+          <div id="blend-shortage-wrap" style="display:none;margin-top:12px;">
+            <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;">
+              <div style="font-size:12px;font-weight:700;color:#92400E;">⚠️ Blend Shortage Allowance: 9%</div>
+              <div style="font-size:11px;color:#B45309;margin-top:4px;">Standard 9% process loss applied for pre-blended material. Net receivable = Purchase Qty × 0.91</div>
+              <div style="margin-top:8px;display:flex;gap:16px;">
+                <span style="font-size:12px;">Purchase Qty: <strong id="blend-purchase-qty">—</strong></span>
+                <span style="font-size:12px;">Expected After Loss: <strong id="blend-net-qty" style="color:#059669;">—</strong></span>
+              </div>
+            </div>
+            <div class="form-row" style="margin-top:10px;">
+              <label>Challan No. (Blend Supplier)</label>
+              <input type="text" id="n-blend-challan" placeholder="e.g. BL/2026/088" />
+            </div>
           </div>
         </div>
-        <div style="display:flex;gap:12px;margin-top:10px;">
+
+        <!-- Batch No + Processing Date + Net Weight -->
+        <div style="display:flex;gap:12px;margin-top:12px;">
           <div class="form-row" style="flex:1">
             <label>Final Batch No. *</label>
             <input type="text" id="n-final-batch" placeholder="e.g. CF-1026" />
@@ -122,18 +191,44 @@
             <label>Repacking / Processing Date</label>
             <input type="date" id="n-repack-date" />
           </div>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:10px;">
           <div class="form-row" style="flex:1">
-            <label>Storage Location</label>
-            <select id="n-storage">
-              <option>Dry Storage Room A</option>
-              <option>Dry Storage Room B</option>
-              <option>Cold Storage</option>
-              <option>Packing Area Store</option>
-            </select>
+            <label>Net Weight (kg)</label>
+            <input type="number" id="n-net-weight" placeholder="e.g. 91" min="0" step="any" oninput="onNetWeightChange()" />
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">After processing loss</div>
           </div>
         </div>
+
+        <!-- Storage Location with split -->
+        <div style="margin-top:12px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">STORAGE ALLOCATION</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;" id="storage-allocation-rows">
+            <div style="flex:1;min-width:160px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px;">
+              <label style="font-size:11px;font-weight:700;color:#1E293B;display:flex;align-items:center;gap:5px;">
+                <input type="checkbox" id="store-dry" onchange="onStorageCheck()" style="accent-color:var(--brand-primary);"> 📦 Dry Storage
+              </label>
+              <select id="store-dry-room" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;" disabled>
+                <option>Dry Storage Room A</option>
+                <option>Dry Storage Room B</option>
+                <option>Packing Area Store</option>
+              </select>
+              <input type="number" id="store-dry-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+            </div>
+            <div style="flex:1;min-width:160px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:10px;">
+              <label style="font-size:11px;font-weight:700;color:#0369A1;display:flex;align-items:center;gap:5px;">
+                <input type="checkbox" id="store-cold" onchange="onStorageCheck()" style="accent-color:#0369A1;"> ❄️ Cold Storage
+              </label>
+              <input type="number" id="store-cold-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #BAE6FD;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+            </div>
+            <div style="flex:1;min-width:160px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px;">
+              <label style="font-size:11px;font-weight:700;color:#92400E;display:flex;align-items:center;gap:5px;">
+                <input type="checkbox" id="store-shop" onchange="onStorageCheck()" style="accent-color:#D97706;"> 🏪 Shop / Retail
+              </label>
+              <input type="number" id="store-shop-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #FED7AA;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+            </div>
+          </div>
+          <div id="storage-balance-hint" style="margin-top:8px;font-size:11px;color:#64748B;"></div>
+        </div>
+
       </div>
 
       <!-- ── STEP 2: PACKING QTY (from Label Maker) ── -->
