@@ -297,7 +297,7 @@ function renderTable() {
         <td style="text-align:center">
           <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
         </td>
-        <td style="font-size:11px;">${b.verifiedBy || 'BHIMLAL SHARMA'}</td>
+        <td style="font-size:11px;">${b.verifiedBy || 'Bhimlal Sharma'}</td>
         <td class="col-edit" onclick="event.stopPropagation()">
           <button class="btn-edit-row" onclick="openEditModal('${b.id}')" title="Edit Batch & Complaint">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -370,7 +370,7 @@ window.openBatch = function(id) {
         <svg class="strip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
         <span class="strip-label">Other Ingredients:</span>
         <span class="strip-value">${b.otherIngredients && b.otherIngredients !== '—' ? b.otherIngredients : '—'}</span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text-muted);">Verified By: <strong>${b.verifiedBy || 'BHIMLAL SHARMA'}</strong></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-muted);">Verified By: <strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong></span>
       </div>
     </div>`;
 };
@@ -843,7 +843,7 @@ window.saveNewBatch = async function() {
     complaint: 'None',
     actionTaken: '—',
     recallStatus: 'Closed',
-    verifiedBy: 'BHIMLAL SHARMA',
+    verifiedBy: 'Bhimlal Sharma',
     isGenerated: false,
     createdAt: timestamp
   };
@@ -896,7 +896,7 @@ window.openEditModal = function(id) {
   document.getElementById('e-dispatch-ref').value = b.invoiceRef && b.invoiceRef !== '—' ? b.invoiceRef : '';
 
   document.getElementById('e-storage').value = b.storageLocation || 'Dry Storage Room A';
-  document.getElementById('e-verified-by').value = b.verifiedBy || 'BHIMLAL SHARMA';
+  document.getElementById('e-verified-by').value = b.verifiedBy || 'Bhimlal Sharma';
 
   updateEditBalancePreview();
   document.getElementById('edit-modal-overlay').style.display = 'flex';
@@ -933,7 +933,7 @@ window.saveBatchEdit = async function() {
   const dispatchQty = Number(document.getElementById('e-dispatch-qty').value) || 0;
   const invoiceRef = document.getElementById('e-dispatch-ref').value.trim();
   const storageLocation = document.getElementById('e-storage').value;
-  const verifiedBy = document.getElementById('e-verified-by').value.trim() || 'BHIMLAL SHARMA';
+  const verifiedBy = document.getElementById('e-verified-by').value.trim() || 'Bhimlal Sharma';
 
   const baseQty = Number(_currentEditBatch.totalFinishedQty) || Number(_currentEditBatch.purchaseQty) || 0;
   const balanceStock = Number((baseQty - dispatchQty).toFixed(2));
