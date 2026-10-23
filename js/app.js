@@ -251,7 +251,7 @@ function renderTable() {
   if (!tbody) return;
 
   if (filteredBatches.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center;padding:48px;color:var(--text-muted);">No batch records found. Click <strong>"+ New Batch"</strong> to create one.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text-muted);">No batch records found. Click <strong>"+ New Batch"</strong> to create one.</td></tr>`;
     return;
   }
 
@@ -259,7 +259,11 @@ function renderTable() {
     const isAct = b.id === currentBatchId;
     const isRecallOpen = b.recallStatus === 'Open' || b.recallStatus === 'Under Investigation';
     const bal = Number(b.balanceStock) || 0;
-    const balColor = bal > 0 ? 'var(--brand-primary)' : 'var(--text-muted)';
+    const netWt = b.netWeight ?? b.purchaseQty ?? 0;
+    const balColor = bal > 0 ? 'var(--brand-primary)' : bal === 0 ? 'var(--text-muted)' : '#DC2626';
+    const procBadge = b.processingDone === 'Yes'
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:#EEF2FF;color:#4338CA;">${(b.processingType||'proc').toUpperCase()}</span>`
+      : '';
 
     return `
       <tr class="${isAct ? 'row-active' : ''}" onclick="openBatch('${b.id}')" style="cursor:pointer;">
@@ -267,40 +271,19 @@ function renderTable() {
         <td class="td-date">${b.displayPurchaseDate || formatDate(b.purchaseDate)}</td>
         <td>
           <div class="td-product-name">${b.productName}</div>
-          <div class="td-batch-sub">${b.finalBatchNo || '—'}</div>
+          <div class="td-batch-sub">${b.finalBatchNo || '—'} ${procBadge}</div>
         </td>
         <td>
           <div class="td-supplier-name">${b.supplierName || '—'}</div>
-          <div class="td-supplier-batch">${b.supplierBatch || '—'}</div>
+          <div class="td-supplier-batch" style="color:#94A3B8;font-size:10px;">${b.invoiceNo || '—'}</div>
         </td>
-        <td class="td-date">${b.invoiceNo || '—'}</td>
-        <td class="td-qty">${b.purchaseQty ?? 0}</td>
-        <td style="text-align:center">
-          <span class="badge-proc ${b.processingDone === 'Yes' ? 'proc-yes' : 'proc-no'}">${b.processingDone || 'No'}</span>
-        </td>
-        <td style="color:var(--text-muted);font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-          ${b.otherIngredients && b.otherIngredients !== '—' ? b.otherIngredients : '—'}
-        </td>
-        <td style="font-weight:700;font-size:11px;color:var(--text-primary);">${b.finalBatchNo || '—'}</td>
-        <td class="td-date">${b.repackingDate || '—'}</td>
-        <td style="font-size:11px;">${b.storageLocation || '—'}</td>
-        <td class="td-qty">${b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0}</td>
-        <td class="td-date">${b.dispatchDate || '—'}</td>
-        <td class="td-qty">${b.dispatchQty || '—'}</td>
-        <td class="td-date">${b.invoiceRef || '—'}</td>
+        <td class="td-qty" style="font-weight:600;">${netWt}</td>
         <td class="td-balance-val" style="color:${balColor};font-weight:800;">${bal}</td>
-        <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-          ${b.complaint && b.complaint !== 'None' ? b.complaint : '<span style="color:var(--text-light)">None</span>'}
-        </td>
-        <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-          ${b.actionTaken || '—'}
-        </td>
         <td style="text-align:center">
           <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
         </td>
-        <td style="font-size:11px;">${b.verifiedBy || 'Bhimlal Sharma'}</td>
         <td class="col-edit" onclick="event.stopPropagation()">
-          <button class="btn-edit-row" onclick="openEditModal('${b.id}')" title="Edit Batch & Complaint">
+          <button class="btn-edit-row" onclick="openEditModal('${b.id}')" title="Edit Batch">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
           </button>
@@ -327,127 +310,171 @@ window.openBatch = function(id) {
   if (!det) return;
 
   const isRecallOpen = b.recallStatus === 'Open' || b.recallStatus === 'Under Investigation';
-  const inwardQty    = b.netWeight ?? b.purchaseQty ?? 0;
-  const finishedQty  = b.totalFinishedQty ?? b.netWeight ?? b.purchaseQty ?? 0;
+  const purchaseQty  = Number(b.purchaseQty)  || 0;
+  const ingArr       = Array.isArray(b.ingredients) ? b.ingredients : [];
+  const ingTotalWt   = ingArr.reduce((s, i) => s + (Number(i.weight) || 0), 0);
+  const totalInputWt = purchaseQty + ingTotalWt;
+  const netWt        = Number(b.netWeight) || purchaseQty;
+  const finishedQty  = Number(b.totalFinishedQty) || netWt;
   const bal          = Number(b.balanceStock) || 0;
-  const procType     = b.processingType || '—';
+  const procType     = b.processingType || '';
   const shortage     = Number(b.blendShortage) || 0;
   const packageCount = b.pkgCount || b.packageCount || '—';
 
-  // Build processing detail string
-  let procDetail = '—';
+  // Processing badge + detail
+  let procBadge = '', procDetail = 'Direct to storage — no processing';
   if (b.processingDone === 'Yes') {
     if (procType === 'factory') {
-      const lossKg = +(inwardQty - (b.netWeight || inwardQty)).toFixed(3);
-      procDetail = `🏭 Factory (Grinding) — Loss: ${shortage > 0 ? shortage : lossKg} kg`;
+      procBadge  = `<span style="background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.4px;">🏭 FACTORY (GRINDING)</span>`;
+      procDetail = `Grinding applied — <strong style="color:#DC2626;">${shortage} kg grinding loss</strong>`;
     } else if (procType === 'blend') {
-      procDetail = `🌀 Blend — No grinding loss`;
+      procBadge  = `<span style="background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.4px;">🌀 BLEND</span>`;
+      procDetail = `Blended — <strong style="color:#16A34A;">No grinding loss</strong>`;
     } else {
-      procDetail = `✅ Processed (${procType})`;
+      procBadge  = `<span style="background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;">✅ PROCESSED</span>`;
+      procDetail = procType || 'Done';
     }
   } else {
-    procDetail = '⬜ No Processing — Direct to Storage';
+    procBadge = `<span style="background:#F8FAFC;color:#64748B;border:1px solid #E2E8F0;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;">⬜ NONE</span>`;
   }
 
-  // Build storage breakdown string
-  let storageBreakdown = '—';
+  // Storage breakdown chips
+  let storageChips = '';
   if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
-    storageBreakdown = b.storageAllocation
-      .map(a => `${a.location}${a.qty ? ': <strong>' + a.qty + ' kg</strong>' : ''}`)
-      .join(' &nbsp;|&nbsp; ');
-  } else if (b.storageLocation && b.storageLocation !== '—') {
-    storageBreakdown = b.storageLocation;
+    storageChips = b.storageAllocation.map(a =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:4px 10px;margin:3px;font-size:11px;color:#166534;"><strong>${a.qty || '?'} kg</strong>&nbsp;— ${a.location}</span>`
+    ).join('');
+  } else {
+    storageChips = `<span style="color:#94A3B8;font-size:11px;">${b.storageLocation || '—'}</span>`;
   }
 
-  // Build ingredients string
-  const ingList = Array.isArray(b.ingredients) && b.ingredients.length
-    ? b.ingredients.map(i => `<span style="display:inline-block;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:5px;padding:2px 8px;margin:2px;font-size:11px;color:#166534;"><strong>${i.name}</strong>${i.batch && i.batch !== 'NIL' ? ' · Lot: '+i.batch : ''} · ${i.weight} kg</span>`).join('')
-    : (b.otherIngredients && b.otherIngredients !== '—' ? `<span style="font-size:11px;color:#166534;">${b.otherIngredients}</span>` : '<span style="color:#94A3B8;font-size:11px;">None</span>');
+  // Ingredient chips
+  const ingChips = ingArr.length
+    ? ingArr.map(i =>
+        `<span style="display:inline-flex;align-items:center;gap:3px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;margin:3px;font-size:11px;color:#1E40AF;">
+          <strong>${i.name}</strong>${i.batch && i.batch !== 'NIL' ? `&nbsp;·&nbsp;Lot:<code style="background:#DBEAFE;padding:1px 4px;border-radius:3px;">${i.batch}</code>` : ''}&nbsp;·&nbsp;<strong>${i.weight} kg</strong>
+        </span>`
+      ).join('')
+    : (b.otherIngredients && b.otherIngredients !== '—'
+        ? `<span style="font-size:11px;color:#1E40AF;">${b.otherIngredients}</span>`
+        : `<span style="color:#94A3B8;font-size:11px;">None added</span>`);
 
-  // Journey step builder
-  const jStep = (num, color, icon, title, rows) => {
-    const rowsHtml = rows.map(([label, val]) =>
-      `<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px solid #F1F5F9;">
-        <span style="min-width:145px;font-size:11px;color:#64748B;font-weight:600;">${label}</span>
-        <span style="font-size:12px;color:#0F172A;font-weight:500;flex:1;">${val}</span>
-      </div>`
-    ).join('');
-    return `
-    <div style="display:flex;gap:12px;margin-bottom:12px;">
-      <div style="display:flex;flex-direction:column;align-items:center;">
-        <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">${icon}</div>
-        <div style="width:2px;background:#E2E8F0;flex:1;margin-top:4px;"></div>
-      </div>
-      <div style="flex:1;background:#FAFBFC;border:1px solid #E8EDF2;border-radius:10px;padding:10px 14px;margin-bottom:0;">
-        <div style="font-size:11px;font-weight:800;color:#475569;letter-spacing:0.5px;margin-bottom:8px;">${num}. ${title}</div>
-        ${rowsHtml}
+  // Builders
+  const sHead = (emoji, step, title, color, bg) =>
+    `<div style="display:flex;align-items:center;gap:10px;background:${bg};padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.06);">
+      <div style="width:28px;height:28px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${emoji}</div>
+      <div>
+        <div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.8px;opacity:.8;">STEP ${step}</div>
+        <div style="font-size:12px;font-weight:800;color:#0F172A;">${title}</div>
       </div>
     </div>`;
-  };
+
+  const row = (label, val) =>
+    `<div style="display:flex;align-items:baseline;padding:6px 16px;border-bottom:1px solid #F8FAFC;">
+      <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;flex-shrink:0;">${label}</span>
+      <span style="font-size:12px;color:#0F172A;font-weight:500;flex:1;">${val}</span>
+    </div>`;
+
+  const chipRow = (label, content) =>
+    `<div style="padding:6px 16px;border-bottom:1px solid #F8FAFC;">
+      <div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:4px;">${label}</div>
+      <div style="display:flex;flex-wrap:wrap;">${content}</div>
+    </div>`;
+
+  const section = (leftColor, header, body) =>
+    `<div style="border:1px solid #E2E8F0;border-left:4px solid ${leftColor};border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+      ${header}${body}
+    </div>`;
+
+  const dispatchDate   = b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : null;
+  const dispatchQty    = b.dispatchQty   && b.dispatchQty   !== '—' ? b.dispatchQty : 0;
 
   det.innerHTML = `
-    <div class="meta-rows-container">
-      <!-- Header -->
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 12px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <h3 style="font-size:15px;font-weight:800;color:var(--text-primary);">${b.productName}</h3>
-          <span style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--brand-subtle);color:var(--brand-primary);">${b.finalBatchNo || '—'}</span>
-          <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
+    <div style="padding:4px 2px;">
+
+      <!-- ── HEADER ── -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:0 2px 16px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+            <h3 style="font-size:17px;font-weight:900;color:#0F172A;margin:0;">${b.productName}</h3>
+            <span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:7px;background:#EEF2FF;color:#4338CA;">${b.finalBatchNo || '—'}</span>
+            <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
+          </div>
+          <div style="font-size:11px;color:#94A3B8;">
+            ID: <code style="background:#F1F5F9;padding:1px 6px;border-radius:4px;color:#475569;">${b.id}</code>
+            &nbsp;·&nbsp; Created: ${b.displayPurchaseDate || formatDate(b.purchaseDate)}
+          </div>
         </div>
-        <button class="btn-sidebar-ghost" style="padding:6px 12px;font-size:11px;" onclick="openEditModal('${b.id}')">
+        <button class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;margin-left:12px;" onclick="openEditModal('${b.id}')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Edit Record
         </button>
       </div>
 
-      <!-- Journey Timeline -->
-      <div style="padding:4px 2px;">
+      <!-- ── STEP 1: PROCUREMENT ── -->
+      ${section('#3B82F6',
+        sHead('📋', '1', 'Procurement — Invoice & Supplier', '#1D4ED8', '#EFF6FF'),
+        row('Purchase Date',       `<strong>${b.displayPurchaseDate || formatDate(b.purchaseDate)}</strong>`)
+        + row('Invoice No.',       `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
+        + row('Supplier Name',     `<strong>${b.supplierName || '—'}</strong>`)
+        + row('Supplier GSTIN',    b.supplierGSTIN || '—')
+        + row('Supplier FSSAI No.',b.supplierFSSAI || '—')
+        + row('Supplier Address',  b.supplierAddress || '—')
+        + row('Supplier Lot / Batch', `<code style="background:#DBEAFE;padding:2px 7px;border-radius:4px;color:#1E40AF;">${b.supplierBatch || 'NIL'}</code>`)
+        + row('Raw Purchase Qty',  `<strong style="font-size:14px;">${purchaseQty} kg</strong>`)
+      )}
 
-        ${jStep(1, '#DBEAFE', '📋', 'PROCUREMENT — Invoice & Supplier', [
-          ['Batch ID',            b.id],
-          ['Purchase Date',       b.displayPurchaseDate || formatDate(b.purchaseDate)],
-          ['Invoice No.',         b.invoiceNo || '—'],
-          ['Supplier Name',       b.supplierName || '—'],
-          ['Supplier GSTIN',      b.supplierGSTIN || '—'],
-          ['Supplier FSSAI',      b.supplierFSSAI || '—'],
-          ['Supplier Address',    b.supplierAddress || '—'],
-          ['Supplier Batch/Lot',  b.supplierBatch || 'NIL'],
-          ['Purchase Qty (Raw)',  (b.purchaseQty || 0) + ' kg'],
-        ])}
+      <!-- ── STEP 2: PROCESSING ── -->
+      ${section('#F59E0B',
+        sHead('⚙️', '2', 'Processing', '#B45309', '#FFFBEB'),
+        `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #F8FAFC;">
+           <span style="font-size:11px;color:#64748B;font-weight:600;min-width:168px;">Processing Type</span>
+           ${procBadge}
+         </div>`
+        + row('Processing Detail', procDetail)
+        + (b.processingDone === 'Yes' ? row('Post-Process Challan', b.challanNo || '—') : '')
+        + chipRow('Extra Ingredients Added', ingChips)
+        + (b.processingDone === 'Yes'
+            ? row('Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#94A3B8;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
+            : '')
+        + (b.processingDone === 'Yes' && procType === 'factory'
+            ? row('Grinding Loss (Shortage)', `<strong style="color:#DC2626;font-size:14px;">— ${shortage} kg</strong>`)
+            : '')
+        + row('Net Weight (Output)', `<strong style="color:#16A34A;font-size:15px;">${netWt} kg</strong>`)
+      )}
 
-        ${jStep(2, '#FEF9C3', '⚙️', 'PROCESSING', [
-          ['Processing Done',     b.processingDone || 'No'],
-          ['Processing Type',     procType !== '—' ? procType.charAt(0).toUpperCase() + procType.slice(1) : '—'],
-          ['Processing Detail',   procDetail],
-          ['Post-Process Challan',b.challanNo || '—'],
-          ['Extra Ingredients',   ingList || '—'],
-          ['Total Input Wt.',     b.processingDone === 'Yes' ? ((b.purchaseQty || 0) + (Array.isArray(b.ingredients) ? b.ingredients.reduce((s,i)=>s+i.weight,0) : 0)) + ' kg' : '—'],
-          ['Grinding/Blend Loss', b.processingDone === 'Yes' && procType === 'factory' ? (shortage || '—') + (shortage ? ' kg' : '') : (procType === 'blend' ? 'NIL (blend)' : '—')],
-          ['Net Weight (Out)',    (b.netWeight || b.purchaseQty || 0) + ' kg'],
-        ])}
+      <!-- ── STEP 3: STORAGE & PACKAGING ── -->
+      ${section('#10B981',
+        sHead('📦', '3', 'Storage & Packaging', '#065F46', '#ECFDF5'),
+        chipRow('Storage Breakdown', storageChips)
+        + row('Repacking / Processing Date', b.repackingDate || '—')
+        + row('Total Packed / Finished Qty', `<strong style="font-size:14px;">${finishedQty} kg</strong>`)
+        + row('No. of Packages Made', packageCount !== '—' ? `<strong>${packageCount}</strong> packages` : '—')
+      )}
 
-        ${jStep(3, '#DCFCE7', '📦', 'STORAGE & PACKAGING', [
-          ['Storage Breakdown',   storageBreakdown],
-          ['Repacking Date',      b.repackingDate || '—'],
-          ['Total Packed/Finished QTY', finishedQty + ' kg'],
-          ['No. of Packages',    packageCount],
-          ['Unpackaged Remaining', finishedQty && packageCount && packageCount !== '—' ? '(see storage breakdown)' : '—'],
-        ])}
+      <!-- ── STEP 4: DISPATCH & COMPLIANCE ── -->
+      ${section(isRecallOpen ? '#DC2626' : '#6366F1',
+        sHead(isRecallOpen ? '🚨' : '🚚', '4', 'Dispatch & Compliance', isRecallOpen ? '#991B1B' : '#3730A3', isRecallOpen ? '#FEF2F2' : '#EEF2FF'),
+        row('Dispatch Date',       dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#94A3B8;">Not dispatched yet</span>')
+        + row('Dispatch Qty',      dispatchQty ? `<strong>${dispatchQty} kg</strong>` : '<span style="color:#94A3B8;">0 kg</span>')
+        + row('Invoice / Dispatch Ref.', b.invoiceRef || '—')
+        + `<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #F8FAFC;background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F8FAFC'};">
+             <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;">Balance Stock</span>
+             <span style="font-size:18px;font-weight:900;color:${bal > 0 ? '#16A34A' : bal < 0 ? '#DC2626' : '#64748B'}">${bal} kg</span>
+           </div>`
+        + `<div style="display:flex;align-items:center;padding:7px 16px;border-bottom:1px solid #F8FAFC;">
+             <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;">Recall Status</span>
+             <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
+           </div>`
+        + row('Complaint / Notes',  b.complaint && b.complaint !== 'None' ? `<span style="color:#DC2626;">${b.complaint}</span>` : '<span style="color:#94A3B8;">None</span>')
+        + row('Action Taken',       b.actionTaken || '—')
+        + row('Verified By',        `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
+      )}
 
-        ${jStep(4, '#FEE2E2', '🚚', 'DISPATCH', [
-          ['Dispatch Date',       b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : 'Not Dispatched'],
-          ['Dispatch Qty',        b.dispatchQty && b.dispatchQty !== '—' ? b.dispatchQty + ' kg' : '0 kg'],
-          ['Invoice / Dispatch Ref', b.invoiceRef || '—'],
-          ['Balance Stock',       `<strong style="color:${bal < 0 ? '#DC2626' : '#16A34A'};">${bal} kg</strong>`],
-          ['Recall Status',       `<span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>`],
-          ['Complaint / Notes',   b.complaint && b.complaint !== 'None' ? b.complaint : 'None'],
-          ['Action Taken',        b.actionTaken || '—'],
-          ['Verified By',         b.verifiedBy || 'Bhimlal Sharma'],
-        ])}
-
-      </div>
     </div>`;
 };
+
+
 
 function metaCard(label, value, iconClass, svgPath, valueClass = '') {
   return `
