@@ -89,8 +89,12 @@ CRITICAL: An invoice may list multiple spice items or lots. You must extract eve
 RETURN ONLY A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
 {
   "purchase_date": "YYYY-MM-DD",
-  "supplier_name": "Full supplier, cold storage or mandi merchant name",
-  "invoice_no": "Bill No or Tax Invoice No or Challan No",
+  "invoice_no": "Tax Invoice No or Bill No (NOT the challan number)",
+  "challan_no": "Delivery Challan No or DC No if printed separately, else null",
+  "supplier_name": "Full supplier or mandi merchant name",
+  "supplier_address": "Complete address of the seller/supplier as printed on document, else null",
+  "gstin": "GST Identification Number of supplier (15-character, e.g. 07AABCU9603R1ZX) — look for labels: GSTIN, GST No, GST IN, GSTIN No. Return null if not found.",
+  "fssai_no": "FSSAI Licence Number of supplier (14-digit number) — look for labels: FSSAI, FBL No, FSSAI Lic No, Lic. No. Return null if not found.",
   "items": [
     {
       "raw_material_name": "Standardized spice commodity name (e.g. 'Chilli Flakes', 'Red Chilli Powder', 'Turmeric Powder', 'Kashmiri Chilli', 'Coriander Seeds', 'Cumin Seeds')",
@@ -107,9 +111,14 @@ RETURN ONLY A VALID JSON OBJECT WITH THIS EXACT STRUCTURE:
 
 RULES:
 1. purchase_date default: today in YYYY-MM-DD if missing.
-2. Standardize raw_material_name (e.g. remove '-50' or 'RAW MATERIAL' brand tags).
+2. Standardize raw_material_name (remove brand tags, model numbers, extra suffixes).
 3. Ensure quantity_kg, rate_per_kg, and total_value are numbers, not strings.
-4. Return ONLY valid JSON, no markdown fences or conversational text.`;
+4. For gstin: scan entire document for a 15-character alphanumeric code matching GST format.
+5. For fssai_no: scan for 14-digit number near FSSAI label.
+6. For supplier_address: extract seller's address block (city, state, pincode), not buyer's.
+7. Use null (not empty string) for any field not visible/legible in the document.
+8. Return ONLY valid JSON, no markdown fences or conversational text.`;
+
 
   const maxAttempts = _B64_KEYS.length * 2;
   let attempts = 0;
