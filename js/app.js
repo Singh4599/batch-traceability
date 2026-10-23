@@ -1053,19 +1053,45 @@ window.saveNewBatch = async function() {
     const remaining = currentOcrItems.length - _ocrSavedCount;
     showToast(`✅ Batch ${finalBatchNo} saved! Opening next item (${_ocrSavedCount + 1}/${currentOcrItems.length})...`, 2500);
     setTimeout(() => {
-      openModal();
-      // Pre-fill common supplier fields from previous scan
+      // Partial reset: keep supplier fields, clear product-specific fields
+      _bStep = 0;
+      ['n-product','n-supplier-batch','n-final-batch','n-net-weight','n-ingredients'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      ['n-qty','n-net-weight','n-total-finished','n-dispatch-qty','n-pkg-count','n-dispatch-ref','n-process-challan'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      // Reset processing
+      document.getElementById('n-processing').value = 'No';
+      const procHint = document.getElementById('processing-auto-hint');
+      if (procHint) procHint.style.display = 'none';
+      const sec = document.getElementById('ingredients-section');
+      if (sec) sec.style.display = 'none';
+      const typeRow = document.getElementById('processing-type-row');
+      if (typeRow) typeRow.style.display = 'none';
+      // Reset storage checkboxes
+      ['dry','cold','shop'].forEach(k => {
+        const cb = document.getElementById('store-' + k); if (cb) { cb.checked = false; }
+        const qty = document.getElementById('store-' + k + '-qty'); if (qty) { qty.value = ''; qty.disabled = true; }
+      });
+      // Reset ingredient rows to single empty row
+      const ingRows = document.getElementById('ingredient-rows');
+      if (ingRows) {
+        ingRows.innerHTML = '<div class="ingredient-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;"><input type="text" placeholder="e.g. Coriander Seeds" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" /><input type="text" placeholder="NIL if none" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" /><input type="number" placeholder="0" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" oninput="recalcNetWeight()" /><button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">&#10005;</button></div>';
+      }
+      const totalEl = document.getElementById('ingredients-total');
+      if (totalEl) totalEl.textContent = '';
+      const balHint = document.getElementById('storage-balance-hint');
+      if (balHint) balHint.textContent = '';
+
+      _updateBatchStepUI();
+      document.getElementById('modal-overlay').style.display = 'flex';
+
       setTimeout(() => {
         selectOcrItem(_ocrSavedCount);
-        // Step stays on 1
-        batchStepNav(0);
-        document.getElementById('step-indicator')?.querySelectorAll('.step-dot').forEach((d, i) => {
-          d.classList.toggle('active', i === 0);
-          d.classList.toggle('done', false);
-        });
-        showToast(`📋 Item ${_ocrSavedCount + 1}/${currentOcrItems.length}: ${nextItem.raw_material_name} — fill and save`, 3000);
-      }, 300);
-    }, 1000);
+        showToast(`📋 Item ${_ocrSavedCount + 1}/${currentOcrItems.length}: ${nextItem.raw_material_name} (${nextItem.quantity_kg} kg) — verify and save`, 3500);
+      }, 200);
+    }, 800);
   } else {
     showToast(ok ? `✅ Batch ${finalBatchNo} saved and synced!` : `Batch ${finalBatchNo} saved locally.`);
     if (currentOcrItems.length > 1) currentOcrItems = []; // clear after all done
