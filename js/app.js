@@ -693,7 +693,7 @@ window.onOCRFileSelected = async function(input) {
     // Populate header details
     if (data.purchase_date) document.getElementById('n-purchase-date').value = data.purchase_date;
     if (data.invoice_no)    document.getElementById('n-invoice').value = data.invoice_no;
-    if (data.challan_no)    { const el = document.getElementById('n-challan'); if(el) el.value = data.challan_no; }
+    if (data.challan_no)    { const el = document.getElementById('n-process-challan'); if(el) el.value = data.challan_no; }
     if (data.supplier_name) document.getElementById('n-supplier').value = data.supplier_name;
     if (data.gstin)         { const el = document.getElementById('n-supplier-gstin'); if(el) el.value = data.gstin; }
     if (data.fssai_no)      { const el = document.getElementById('n-supplier-fssai'); if(el) el.value = data.fssai_no; }
@@ -941,7 +941,6 @@ window.saveNewBatch = async function() {
   const productName   = document.getElementById('n-product').value.trim();
   const supplierName  = document.getElementById('n-supplier').value.trim();
   const invoiceNo     = document.getElementById('n-invoice').value.trim();
-  const challanNo     = document.getElementById('n-challan')?.value.trim() || '';
   const supplierBatch = document.getElementById('n-supplier-batch').value.trim();
   const supplierGSTIN = document.getElementById('n-supplier-gstin')?.value.trim() || '';
   const supplierFSSAI = document.getElementById('n-supplier-fssai')?.value.trim() || '';
