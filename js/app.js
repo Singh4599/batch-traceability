@@ -275,9 +275,13 @@ function renderTable() {
         </td>
         <td>
           <div class="td-supplier-name">${b.supplierName || '—'}</div>
-          <div class="td-supplier-batch" style="color:#94A3B8;font-size:10px;">${b.invoiceNo || '—'}</div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:2px;flex-wrap:wrap;">
+            ${b.supplierBatch && b.supplierBatch !== 'NIL' && b.supplierBatch !== '—'
+              ? `<span style="font-size:9px;background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;padding:1px 5px;border-radius:4px;font-weight:600;">${b.supplierBatch}</span>` : ''}
+            <span style="font-size:10px;color:#94A3B8;">${b.invoiceNo && b.invoiceNo !== '—' ? '· ' + b.invoiceNo : ''}</span>
+          </div>
         </td>
-        <td class="td-qty" style="font-weight:600;">${netWt}</td>
+        <td class="td-qty" style="font-weight:700;">${netWt}</td>
         <td class="td-balance-val" style="color:${balColor};font-weight:800;">${bal}</td>
         <td style="text-align:center">
           <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
@@ -289,6 +293,7 @@ function renderTable() {
           </button>
         </td>
       </tr>`;
+
   }).join('');
 }
 
@@ -319,160 +324,174 @@ window.openBatch = function(id) {
   const bal          = Number(b.balanceStock) || 0;
   const procType     = b.processingType || '';
   const shortage     = Number(b.blendShortage) || 0;
-  const packageCount = b.pkgCount || b.packageCount || '—';
+  const packageCount = b.pkgCount || b.packageCount || null;
+  const dispatchQty  = b.dispatchQty && b.dispatchQty !== '—' ? Number(b.dispatchQty) : 0;
+  const dispatchDate = b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : null;
 
-  // Processing badge + detail
-  let procBadge = '', procDetail = 'Direct to storage — no processing';
-  if (b.processingDone === 'Yes') {
-    if (procType === 'factory') {
-      procBadge  = `<span style="background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.4px;">🏭 FACTORY (GRINDING)</span>`;
-      procDetail = `Grinding applied — <strong style="color:#DC2626;">${shortage} kg grinding loss</strong>`;
-    } else if (procType === 'blend') {
-      procBadge  = `<span style="background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.4px;">🌀 BLEND</span>`;
-      procDetail = `Blended — <strong style="color:#16A34A;">No grinding loss</strong>`;
-    } else {
-      procBadge  = `<span style="background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;">✅ PROCESSED</span>`;
-      procDetail = procType || 'Done';
-    }
-  } else {
-    procBadge = `<span style="background:#F8FAFC;color:#64748B;border:1px solid #E2E8F0;padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;">⬜ NONE</span>`;
-  }
-
-  // Storage breakdown chips
+  // --- Storage chips ---
   let storageChips = '';
   if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
     storageChips = b.storageAllocation.map(a =>
-      `<span style="display:inline-flex;align-items:center;gap:4px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:4px 10px;margin:3px;font-size:11px;color:#166534;"><strong>${a.qty || '?'} kg</strong>&nbsp;— ${a.location}</span>`
+      `<div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D1FAE5;border-radius:8px;padding:5px 12px;margin:3px;">
+        <span style="font-size:13px;font-weight:800;color:#059669;">${a.qty || '?'} kg</span>
+        <span style="font-size:11px;color:#374151;">— ${a.location}</span>
+       </div>`
     ).join('');
   } else {
-    storageChips = `<span style="color:#94A3B8;font-size:11px;">${b.storageLocation || '—'}</span>`;
+    storageChips = `<span style="font-size:12px;color:#6B7280;">${b.storageLocation || '—'}</span>`;
   }
 
-  // Ingredient chips
+  // --- Ingredient chips ---
   const ingChips = ingArr.length
     ? ingArr.map(i =>
-        `<span style="display:inline-flex;align-items:center;gap:3px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:4px 10px;margin:3px;font-size:11px;color:#1E40AF;">
-          <strong>${i.name}</strong>${i.batch && i.batch !== 'NIL' ? `&nbsp;·&nbsp;Lot:<code style="background:#DBEAFE;padding:1px 4px;border-radius:3px;">${i.batch}</code>` : ''}&nbsp;·&nbsp;<strong>${i.weight} kg</strong>
-        </span>`
+        `<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 12px;margin:3px;">
+           <span style="font-size:12px;font-weight:700;color:#1D4ED8;">${i.name}</span>
+           ${i.batch && i.batch !== 'NIL' ? `<span style="font-size:10px;background:#DBEAFE;color:#1E40AF;padding:1px 6px;border-radius:4px;">Lot: ${i.batch}</span>` : ''}
+           <span style="font-size:12px;font-weight:700;color:#374151;">${i.weight} kg</span>
+         </div>`
       ).join('')
     : (b.otherIngredients && b.otherIngredients !== '—'
-        ? `<span style="font-size:11px;color:#1E40AF;">${b.otherIngredients}</span>`
-        : `<span style="color:#94A3B8;font-size:11px;">None added</span>`);
+        ? `<span style="font-size:12px;color:#374151;">${b.otherIngredients}</span>`
+        : `<span style="font-size:12px;color:#9CA3AF;">None added</span>`);
 
-  // Builders
-  const sHead = (emoji, step, title, color, bg) =>
-    `<div style="display:flex;align-items:center;gap:10px;background:${bg};padding:10px 16px;border-bottom:1px solid rgba(0,0,0,0.06);">
-      <div style="width:28px;height:28px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${emoji}</div>
-      <div>
-        <div style="font-size:9px;font-weight:700;color:${color};letter-spacing:.8px;opacity:.8;">STEP ${step}</div>
-        <div style="font-size:12px;font-weight:800;color:#0F172A;">${title}</div>
-      </div>
+  // --- Processing label ---
+  let procLabel = 'None', procColor = '#6B7280', procBg = '#F9FAFB';
+  if (b.processingDone === 'Yes') {
+    if (procType === 'factory')   { procLabel = '🏭 Factory (Grinding)'; procColor = '#7C3AED'; procBg = '#F5F3FF'; }
+    else if (procType === 'blend'){ procLabel = '🌀 Blending';            procColor = '#0891B2'; procBg = '#ECFEFF'; }
+    else                          { procLabel = '✅ ' + procType;          procColor = '#059669'; procBg = '#ECFDF5'; }
+  }
+
+  // --- KV row helper ---
+  const kv = (k, v) => `
+    <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F3F4F6;">
+      <span style="width:140px;flex-shrink:0;font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;line-height:1.4;">${k}</span>
+      <span style="font-size:12px;color:#111827;font-weight:500;flex:1;line-height:1.4;">${v}</span>
     </div>`;
 
-  const row = (label, val) =>
-    `<div style="display:flex;align-items:baseline;padding:6px 16px;border-bottom:1px solid #F8FAFC;">
-      <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;flex-shrink:0;">${label}</span>
-      <span style="font-size:12px;color:#0F172A;font-weight:500;flex:1;">${val}</span>
-    </div>`;
+  // --- Section card helper ---
+  const card = (content, extraStyle='') =>
+    `<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;box-shadow:0 1px 3px rgba(0,0,0,0.06);overflow:hidden;${extraStyle}">${content}</div>`;
 
-  const chipRow = (label, content) =>
-    `<div style="padding:6px 16px;border-bottom:1px solid #F8FAFC;">
-      <div style="font-size:11px;color:#64748B;font-weight:600;margin-bottom:4px;">${label}</div>
-      <div style="display:flex;flex-wrap:wrap;">${content}</div>
-    </div>`;
+  const cardHead = (emoji, title, subtitle='', bg='#F9FAFB', color='#111827') =>
+    `<div style="display:flex;align-items:center;gap:10px;background:${bg};padding:11px 16px;border-bottom:1px solid #E5E7EB;">
+       <span style="font-size:18px;line-height:1;">${emoji}</span>
+       <div>
+         <div style="font-size:13px;font-weight:800;color:${color};line-height:1.2;">${title}</div>
+         ${subtitle ? `<div style="font-size:10px;color:${color};opacity:.65;margin-top:1px;">${subtitle}</div>` : ''}
+       </div>
+     </div>`;
 
-  const section = (leftColor, header, body) =>
-    `<div style="border:1px solid #E2E8F0;border-left:4px solid ${leftColor};border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-      ${header}${body}
-    </div>`;
-
-  const dispatchDate   = b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : null;
-  const dispatchQty    = b.dispatchQty   && b.dispatchQty   !== '—' ? b.dispatchQty : 0;
+  const body = (content) => `<div style="padding:4px 16px 8px;">${content}</div>`;
 
   det.innerHTML = `
-    <div style="padding:4px 2px;">
+  <div style="font-family:'Inter',system-ui,sans-serif;">
 
-      <!-- ── HEADER ── -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:0 2px 16px;">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <h3 style="font-size:17px;font-weight:900;color:#0F172A;margin:0;">${b.productName}</h3>
-            <span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:7px;background:#EEF2FF;color:#4338CA;">${b.finalBatchNo || '—'}</span>
-            <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
-          </div>
-          <div style="font-size:11px;color:#94A3B8;">
-            ID: <code style="background:#F1F5F9;padding:1px 6px;border-radius:4px;color:#475569;">${b.id}</code>
-            &nbsp;·&nbsp; Created: ${b.displayPurchaseDate || formatDate(b.purchaseDate)}
-          </div>
+    <!-- ══ HEADER BAR ══ -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:5px;line-height:1.2;">${b.productName}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:#EDE9FE;color:#6D28D9;">${b.finalBatchNo || '—'}</span>
+          <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
+          <span style="font-size:10px;color:#9CA3AF;">ID: ${b.id}</span>
         </div>
-        <button class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;margin-left:12px;" onclick="openEditModal('${b.id}')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit Record
-        </button>
       </div>
+      <button class="btn-sidebar-ghost" style="padding:8px 14px;font-size:11px;flex-shrink:0;margin-left:10px;" onclick="openEditModal('${b.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit
+      </button>
+    </div>
 
-      <!-- ── STEP 1: PROCUREMENT ── -->
-      ${section('#3B82F6',
-        sHead('📋', '1', 'Procurement — Invoice & Supplier', '#1D4ED8', '#EFF6FF'),
-        row('Purchase Date',       `<strong>${b.displayPurchaseDate || formatDate(b.purchaseDate)}</strong>`)
-        + row('Invoice No.',       `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
-        + row('Supplier Name',     `<strong>${b.supplierName || '—'}</strong>`)
-        + row('Supplier GSTIN',    b.supplierGSTIN || '—')
-        + row('Supplier FSSAI No.',b.supplierFSSAI || '—')
-        + row('Supplier Address',  b.supplierAddress || '—')
-        + row('Supplier Lot / Batch', `<code style="background:#DBEAFE;padding:2px 7px;border-radius:4px;color:#1E40AF;">${b.supplierBatch || 'NIL'}</code>`)
-        + row('Raw Purchase Qty',  `<strong style="font-size:14px;">${purchaseQty} kg</strong>`)
-      )}
+    <!-- ══ STEP 1: PROCUREMENT ══ -->
+    ${card(
+      cardHead('📋', 'Procurement & Supplier', 'Invoice · Origin · Lot traceability', '#EFF6FF', '#1D4ED8')
+      + body(
+          kv('Supplier Name',    `<strong style="font-size:13px;color:#111827;">${b.supplierName || '—'}</strong>`)
+        + kv('Supplier GSTIN',   b.supplierGSTIN || '—')
+        + kv('Supplier FSSAI',   b.supplierFSSAI || '—')
+        + kv('Supplier Address', b.supplierAddress || '—')
+        + kv('Invoice No.',      `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
+        + kv('Supplier Batch/Lot', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;font-size:11px;">${b.supplierBatch || 'NIL'}</code>`)
+        + kv('Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
+        + kv('Raw Purchase Qty', `<span style="font-size:14px;font-weight:800;color:#111827;">${purchaseQty} kg</span>`)
+      ),
+    'margin-bottom:12px;')}
 
-      <!-- ── STEP 2: PROCESSING ── -->
-      ${section('#F59E0B',
-        sHead('⚙️', '2', 'Processing', '#B45309', '#FFFBEB'),
-        `<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #F8FAFC;">
-           <span style="font-size:11px;color:#64748B;font-weight:600;min-width:168px;">Processing Type</span>
-           ${procBadge}
-         </div>`
-        + row('Processing Detail', procDetail)
-        + (b.processingDone === 'Yes' ? row('Post-Process Challan', b.challanNo || '—') : '')
-        + chipRow('Extra Ingredients Added', ingChips)
-        + (b.processingDone === 'Yes'
-            ? row('Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#94A3B8;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
-            : '')
-        + (b.processingDone === 'Yes' && procType === 'factory'
-            ? row('Grinding Loss (Shortage)', `<strong style="color:#DC2626;font-size:14px;">— ${shortage} kg</strong>`)
-            : '')
-        + row('Net Weight (Output)', `<strong style="color:#16A34A;font-size:15px;">${netWt} kg</strong>`)
-      )}
-
-      <!-- ── STEP 3: STORAGE & PACKAGING ── -->
-      ${section('#10B981',
-        sHead('📦', '3', 'Storage & Packaging', '#065F46', '#ECFDF5'),
-        chipRow('Storage Breakdown', storageChips)
-        + row('Repacking / Processing Date', b.repackingDate || '—')
-        + row('Total Packed / Finished Qty', `<strong style="font-size:14px;">${finishedQty} kg</strong>`)
-        + row('No. of Packages Made', packageCount !== '—' ? `<strong>${packageCount}</strong> packages` : '—')
-      )}
-
-      <!-- ── STEP 4: DISPATCH & COMPLIANCE ── -->
-      ${section(isRecallOpen ? '#DC2626' : '#6366F1',
-        sHead(isRecallOpen ? '🚨' : '🚚', '4', 'Dispatch & Compliance', isRecallOpen ? '#991B1B' : '#3730A3', isRecallOpen ? '#FEF2F2' : '#EEF2FF'),
-        row('Dispatch Date',       dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#94A3B8;">Not dispatched yet</span>')
-        + row('Dispatch Qty',      dispatchQty ? `<strong>${dispatchQty} kg</strong>` : '<span style="color:#94A3B8;">0 kg</span>')
-        + row('Invoice / Dispatch Ref.', b.invoiceRef || '—')
-        + `<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #F8FAFC;background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F8FAFC'};">
-             <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;">Balance Stock</span>
-             <span style="font-size:18px;font-weight:900;color:${bal > 0 ? '#16A34A' : bal < 0 ? '#DC2626' : '#64748B'}">${bal} kg</span>
+    <!-- ══ STEP 2: PROCESSING ══ -->
+    ${card(
+      cardHead('⚙️', 'Processing', 'Grinding · Blending · Ingredients added', '#FFFBEB', '#B45309')
+      + body(
+          kv('Processing Type',
+            `<span style="background:${procBg};color:${procColor};border:1.5px solid ${procColor}33;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;">${procLabel}</span>`)
+        + (b.processingDone === 'Yes' ? kv('Post-Process Challan', b.challanNo || '—') : '')
+        + `<div style="padding:7px 0;border-bottom:1px solid #F3F4F6;">
+             <div style="font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Extra Ingredients Added</div>
+             <div style="display:flex;flex-wrap:wrap;gap:0;">${ingChips}</div>
            </div>`
-        + `<div style="display:flex;align-items:center;padding:7px 16px;border-bottom:1px solid #F8FAFC;">
-             <span style="min-width:168px;font-size:11px;color:#64748B;font-weight:600;">Recall Status</span>
+        + (b.processingDone === 'Yes'
+          ? kv('Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#9CA3AF;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
+          : '')
+        + (b.processingDone === 'Yes' && procType === 'factory' && shortage > 0
+          ? `<div style="margin:8px 0;background:linear-gradient(135deg,#FEF2F2 0%,#FFF5F5 100%);border:2px solid #FECACA;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
+               <span style="font-size:22px;">⚠️</span>
+               <div>
+                 <div style="font-size:10px;font-weight:700;color:#991B1B;text-transform:uppercase;letter-spacing:.5px;">Grinding Loss / Shortage</div>
+                 <div style="font-size:20px;font-weight:900;color:#DC2626;line-height:1.1;">−${shortage} kg</div>
+                 <div style="font-size:10px;color:#B91C1C;">${purchaseQty} kg in → ${netWt} kg out</div>
+               </div>
+             </div>`
+          : (procType === 'blend' ? kv('Blending Loss', '<span style="color:#059669;font-weight:700;">NIL — no loss in blending</span>') : ''))
+        + kv('Net Weight (Output)', `<span style="font-size:15px;font-weight:900;color:#059669;">${netWt} kg</span>`)
+      ),
+    'margin-bottom:12px;')}
+
+    <!-- ══ STEP 3: STORAGE & PACKAGING ══ -->
+    ${card(
+      cardHead('📦', 'Storage & Packaging', 'Location breakdown · Package count', '#ECFDF5', '#065F46')
+      + body(
+          `<div style="padding:7px 0;border-bottom:1px solid #F3F4F6;">
+             <div style="font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Storage Breakdown</div>
+             <div style="display:flex;flex-wrap:wrap;">${storageChips}</div>
+           </div>`
+        + kv('Repacking / Processing Date', b.repackingDate || '—')
+        + kv('Total Packed / Finished Qty', `<span style="font-size:14px;font-weight:800;color:#111827;">${finishedQty} kg</span>`)
+        + kv('No. of Packages Made', packageCount ? `<strong style="font-size:14px;">${packageCount}</strong> <span style="color:#6B7280;">packages</span>` : '—')
+      ),
+    'margin-bottom:12px;')}
+
+    <!-- ══ STEP 4: DISPATCH & COMPLIANCE ══ -->
+    ${card(
+      cardHead(isRecallOpen ? '🚨' : '🚚', 'Dispatch & Compliance', 'Outward · Balance · Recall status', isRecallOpen ? '#FEF2F2' : '#F5F3FF', isRecallOpen ? '#991B1B' : '#5B21B6')
+      + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #F3F4F6;">
+           <div style="padding:12px 16px;border-right:1px solid #F3F4F6;text-align:center;background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F9FAFB'};">
+             <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Balance Stock</div>
+             <div style="font-size:24px;font-weight:900;color:${bal > 0 ? '#059669' : bal < 0 ? '#DC2626' : '#6B7280'};">${bal} kg</div>
+           </div>
+           <div style="padding:12px 16px;text-align:center;">
+             <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Dispatched</div>
+             <div style="font-size:24px;font-weight:900;color:${dispatchQty > 0 ? '#1D4ED8' : '#9CA3AF'};">${dispatchQty} kg</div>
+           </div>
+         </div>`
+      + body(
+          kv('Dispatch Date',         dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#9CA3AF;">Not dispatched yet</span>')
+        + kv('Invoice / Dispatch Ref.', b.invoiceRef || '—')
+        + `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #F3F4F6;align-items:center;">
+             <span style="width:140px;flex-shrink:0;font-size:10.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;">Recall Status</span>
              <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
            </div>`
-        + row('Complaint / Notes',  b.complaint && b.complaint !== 'None' ? `<span style="color:#DC2626;">${b.complaint}</span>` : '<span style="color:#94A3B8;">None</span>')
-        + row('Action Taken',       b.actionTaken || '—')
-        + row('Verified By',        `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
-      )}
+        + kv('Complaint / Notes',    b.complaint && b.complaint !== 'None' ? `<span style="color:#DC2626;">${b.complaint}</span>` : '<span style="color:#9CA3AF;">None</span>')
+        + kv('Action Taken',         b.actionTaken || '—')
+        + kv('Verified By',          `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
+      ),
+    'margin-bottom:4px;')}
 
-    </div>`;
+  </div>`;
 };
+
+
+
+
 
 
 
