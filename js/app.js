@@ -940,10 +940,13 @@ window.selectPkgGroup = function(kg, count, date) {
 
 // ── BALANCE PREVIEW ──────────────────────────────────────────────────────────
 window.updateBalancePreview = function() {
-  const pQty = Number(document.getElementById('n-qty').value) || 0;
-  const fQty = Number(document.getElementById('n-total-finished').value) || pQty;
-  const dQty = Number(document.getElementById('n-dispatch-qty').value) || 0;
-  const baseQty = fQty > 0 ? fQty : pQty;
+  const pQty   = Number(document.getElementById('n-qty').value) || 0;
+  const netWt  = Number(document.getElementById('n-net-weight')?.value) || 0;
+  const fQty   = Number(document.getElementById('n-total-finished').value) || 0;
+  const dQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
+
+  // Priority: manually entered finished qty → net weight (post-processing) → purchase qty
+  const baseQty = fQty > 0 ? fQty : netWt > 0 ? netWt : pQty;
   const bal = Number((baseQty - dQty).toFixed(2));
 
   const pEl = document.getElementById('prev-purchase-qty');
@@ -957,6 +960,7 @@ window.updateBalancePreview = function() {
     bEl.style.color = bal >= 0 ? 'var(--brand-primary)' : '#DC2626';
   }
 };
+
 
 // ── SAVE NEW BATCH ───────────────────────────────────────────────────────────
 window.saveNewBatch = async function() {
@@ -994,8 +998,8 @@ window.saveNewBatch = async function() {
   // Post-processing challan (Step 2)
   const challanNo = document.getElementById('n-process-challan')?.value.trim() || '';
 
-  // Balance = Finished Qty (or Purchase Qty) - Dispatch Qty
-  const baseQty = totalFinishedQty > 0 ? totalFinishedQty : purchaseQty;
+  // Balance = Finished Qty → Net Weight → Purchase Qty (in order of priority)
+  const baseQty = totalFinishedQty > 0 ? totalFinishedQty : netWeight > 0 ? netWeight : purchaseQty;
   const balanceStock = Number((baseQty - dispatchQty).toFixed(2));
 
   if (!purchaseDate || !productName || !supplierName) {
