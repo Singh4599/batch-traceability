@@ -163,6 +163,7 @@ let filteredBatches = [];
 let currentBatchId = null;
 let labelPrintRecords = []; // Live Dukan Bai sticker records from lablerecords-3f897
 let currentOcrItems = [];
+let _ocrSavedCount = 0; // tracks how many OCR items already saved in current scan session
 let _bStep = 0;
 const TOTAL_STEPS = 4;
 
@@ -680,6 +681,7 @@ window.onOCRFileSelected = async function(input) {
 
   bar.style.display = 'block';
   chipsPicker.classList.add('hidden');
+  _ocrSavedCount = 0;
   label.textContent = '🔍 Scanning invoice with Gemini AI...';
 
   const { ok, data, items, thumb } = await scanPurchaseInvoice(file, (pct, msg) => {
@@ -706,7 +708,7 @@ window.onOCRFileSelected = async function(input) {
       chipsPicker.classList.remove('hidden');
       const chipsWrap = document.getElementById('ocr-items-chips-wrap');
       chipsWrap.innerHTML = currentOcrItems.map((it, idx) => `
-        <button type="button" class="ocr-item-chip ${idx === 0 ? 'selected' : ''}" onclick="selectOcrItem(${idx})">
+        <button type="button" class="ocr-item-chip ${idx === 0 ? 'selected' : ''} ${idx < _ocrSavedCount ? 'saved' : ''}" onclick="selectOcrItem(${idx})" id="ocr-chip-${idx}">
           <strong>${it.raw_material_name}</strong>
           <span>&middot; ${it.quantity_kg} kg</span>
           ${it.supplier_batch_no ? `<span>(Lot: ${it.supplier_batch_no})</span>` : ''}
@@ -1040,7 +1042,34 @@ window.saveNewBatch = async function() {
   openBatch(newId);
   closeModal();
 
-  showToast(ok ? `✅ Batch ${finalBatchNo} saved and synced!` : `Batch ${finalBatchNo} saved locally.`);
+  // If multi-item OCR invoice, track and reopen for next item
+  const ocrRemaining = currentOcrItems.filter((_, i) => i > _ocrSavedCount);
+  // Mark the saved chip visually
+  const savedChipEl = document.getElementById('ocr-chip-' + (_ocrSavedCount));
+  if (savedChipEl) savedChipEl.classList.add('saved');
+  _ocrSavedCount++;
+  if (currentOcrItems.length > 1 && _ocrSavedCount < currentOcrItems.length) {
+    const nextItem = currentOcrItems[_ocrSavedCount];
+    const remaining = currentOcrItems.length - _ocrSavedCount;
+    showToast(`✅ Batch ${finalBatchNo} saved! Opening next item (${_ocrSavedCount + 1}/${currentOcrItems.length})...`, 2500);
+    setTimeout(() => {
+      openModal();
+      // Pre-fill common supplier fields from previous scan
+      setTimeout(() => {
+        selectOcrItem(_ocrSavedCount);
+        // Step stays on 1
+        batchStepNav(0);
+        document.getElementById('step-indicator')?.querySelectorAll('.step-dot').forEach((d, i) => {
+          d.classList.toggle('active', i === 0);
+          d.classList.toggle('done', false);
+        });
+        showToast(`📋 Item ${_ocrSavedCount + 1}/${currentOcrItems.length}: ${nextItem.raw_material_name} — fill and save`, 3000);
+      }, 300);
+    }, 1000);
+  } else {
+    showToast(ok ? `✅ Batch ${finalBatchNo} saved and synced!` : `Batch ${finalBatchNo} saved locally.`);
+    if (currentOcrItems.length > 1) currentOcrItems = []; // clear after all done
+  }
 };
 
 // ── EDIT RECORD MODAL ────────────────────────────────────────────────────────
