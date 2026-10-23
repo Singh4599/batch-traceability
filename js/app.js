@@ -525,67 +525,76 @@ window.onProcessingChange = function(val) {
   const typeRow = document.getElementById('processing-type-row');
   if (typeRow) typeRow.style.display = val === 'Yes' ? '' : 'none';
   if (val !== 'Yes') {
-    // Reset proc type selection
     document.querySelectorAll('input[name="proc-type"]').forEach(r => r.checked = false);
-    const fw = document.getElementById('factory-ingredients-wrap');
-    const bw = document.getElementById('blend-shortage-wrap');
-    if (fw) fw.style.display = 'none';
-    if (bw) bw.style.display = 'none';
-    document.getElementById('lbl-factory').style.borderColor = '#E2E8F0';
-    document.getElementById('lbl-blend').style.borderColor = '#E2E8F0';
+    const sec = document.getElementById('ingredients-section');
+    const pc  = document.getElementById('post-challan-row');
+    if (sec) sec.style.display = 'none';
+    if (pc)  pc.style.display  = 'none';
+    const lf = document.getElementById('lbl-factory');
+    const lb = document.getElementById('lbl-blend');
+    if (lf) { lf.style.borderColor = '#E2E8F0'; lf.style.background = ''; }
+    if (lb) { lb.style.borderColor = '#E2E8F0'; lb.style.background = ''; }
   }
 };
 
 window.onProcTypeChange = function(type) {
-  const fw = document.getElementById('factory-ingredients-wrap');
-  const bw = document.getElementById('blend-shortage-wrap');
-  const lf = document.getElementById('lbl-factory');
-  const lb = document.getElementById('lbl-blend');
-
+  const sec  = document.getElementById('ingredients-section');
+  const fBar = document.getElementById('factory-info-bar');
+  const bBar = document.getElementById('blend-info-bar');
+  const pc   = document.getElementById('post-challan-row');
+  const lf   = document.getElementById('lbl-factory');
+  const lb   = document.getElementById('lbl-blend');
+  if (sec) sec.style.display = '';
+  if (pc)  pc.style.display  = '';
   if (type === 'factory') {
-    if (fw) fw.style.display = '';
-    if (bw) bw.style.display = 'none';
-    lf.style.borderColor = 'var(--brand-primary)';
-    lf.style.background = '#EEF2FF';
-    lb.style.borderColor = '#E2E8F0';
-    lb.style.background = '';
+    if (fBar) fBar.style.display = '';
+    if (bBar) bBar.style.display = 'none';
+    lf.style.borderColor = 'var(--brand-primary)'; lf.style.background = '#EEF2FF';
+    lb.style.borderColor = '#E2E8F0';               lb.style.background = '';
   } else {
-    if (fw) fw.style.display = 'none';
-    if (bw) bw.style.display = '';
-    lb.style.borderColor = '#F59E0B';
-    lb.style.background = '#FFFBEB';
-    lf.style.borderColor = '#E2E8F0';
-    lf.style.background = '';
-    // Show 9% calculation based on purchase qty
-    updateBlendShortage();
+    if (fBar) fBar.style.display = 'none';
+    if (bBar) bBar.style.display = '';
+    lb.style.borderColor = '#16A34A'; lb.style.background = '#F0FDF4';
+    lf.style.borderColor = '#E2E8F0'; lf.style.background = '';
   }
+  recalcNetWeight();
 };
 
-function updateBlendShortage() {
-  const qty = Number(document.getElementById('n-qty')?.value) || 0;
-  const net = +(qty * 0.91).toFixed(2);
-  const pEl = document.getElementById('blend-purchase-qty');
-  const nEl = document.getElementById('blend-net-qty');
-  if (pEl) pEl.textContent = qty > 0 ? qty + ' kg' : '—';
-  if (nEl) nEl.textContent = net > 0 ? net + ' kg' : '—';
-  // Auto-fill net weight
-  const nw = document.getElementById('n-net-weight');
-  if (nw && !nw.value && net > 0) nw.value = net;
-}
+window.recalcNetWeight = function() {
+  const rows = document.querySelectorAll('#ingredient-rows .ingredient-row');
+  let total = 0;
+  rows.forEach(r => { total += Number(r.querySelector('.ing-weight')?.value) || 0; });
+  const procType = document.querySelector('input[name="proc-type"]:checked')?.value || '';
+  const shortPct = procType === 'factory'
+    ? Number(document.getElementById('factory-shortage-pct')?.value) || 9
+    : 0;
+  const netWt = +(total * (1 - shortPct / 100)).toFixed(3);
+  const nwEl = document.getElementById('n-net-weight');
+  if (nwEl && total > 0) nwEl.value = netWt;
+  const totalEl = document.getElementById('ingredients-total');
+  if (totalEl) {
+    if (total === 0) { totalEl.textContent = ''; }
+    else if (procType === 'factory') {
+      totalEl.innerHTML = 'Total in: <strong>' + total + ' kg</strong> &rarr; After <strong>' + shortPct + '%</strong> loss: <strong style="color:#4338CA">' + netWt + ' kg</strong>';
+    } else {
+      totalEl.innerHTML = 'Total: <strong style="color:#166534">' + total + ' kg</strong> (no loss)';
+    }
+  }
+  onStorageQtyChange();
+};
 
 window.addIngredientRow = function() {
   const container = document.getElementById('ingredient-rows');
   if (!container) return;
   const row = document.createElement('div');
   row.className = 'ingredient-row';
-  row.style.cssText = 'display:flex;gap:8px;margin-bottom:6px;align-items:center;';
-  row.innerHTML = `
-    <input type="text" placeholder="Ingredient name" style="flex:2;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" />
-    <input type="text" placeholder="Batch No." style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" />
-    <input type="number" placeholder="Weight (kg)" style="flex:1;padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" />
-    <button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;">✕</button>
-  `;
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;';
+  row.innerHTML = '<input type="text" placeholder="e.g. Coriander Seeds" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" />' +
+    '<input type="text" placeholder="NIL if none" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" />' +
+    '<input type="number" placeholder="0" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" oninput="recalcNetWeight()" />' +
+    '<button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">✕</button>';
   container.appendChild(row);
+  row.querySelector('.ing-name')?.focus();
 };
 
 window.removeIngredientRow = function(btn) {
@@ -594,22 +603,18 @@ window.removeIngredientRow = function(btn) {
   if (container && container.querySelectorAll('.ingredient-row').length > 1) {
     row?.remove();
   } else {
-    // Clear the last row instead of removing it
-    if (row) {
-      row.querySelectorAll('input').forEach(i => i.value = '');
-    }
+    if (row) row.querySelectorAll('input').forEach(i => i.value = '');
   }
+  recalcNetWeight();
 };
 
-window.onNetWeightChange = function() {
-  onStorageQtyChange();
-};
+window.onNetWeightChange = function() { onStorageQtyChange(); };
 
 window.onStorageCheck = function() {
   ['dry','cold','shop'].forEach(key => {
-    const cb = document.getElementById(`store-${key}`);
-    const qtyEl = document.getElementById(`store-${key}-qty`);
-    const roomEl = document.getElementById(`store-${key}-room`);
+    const cb = document.getElementById('store-' + key);
+    const qtyEl = document.getElementById('store-' + key + '-qty');
+    const roomEl = document.getElementById('store-' + key + '-room');
     if (!cb || !qtyEl) return;
     const enabled = cb.checked;
     qtyEl.disabled = !enabled;
@@ -630,7 +635,7 @@ window.onStorageQtyChange = function() {
   if (!hint) return;
   if (netWt === 0) { hint.textContent = ''; return; }
   const color = remaining < 0 ? '#EF4444' : remaining === 0 ? '#059669' : '#D97706';
-  hint.innerHTML = `Allocated: <strong>${allocated} kg</strong> &nbsp;|&nbsp; Net Weight: <strong>${netWt} kg</strong> &nbsp;|&nbsp; Remaining: <strong style="color:${color}">${remaining} kg</strong>`;
+  hint.innerHTML = 'Allocated: <strong>' + allocated + ' kg</strong> &nbsp;|&nbsp; Net Weight: <strong>' + netWt + ' kg</strong> &nbsp;|&nbsp; Remaining: <strong style="color:' + color + '">' + remaining + ' kg</strong>';
 };
 
 function collectIngredients() {
@@ -640,7 +645,7 @@ function collectIngredients() {
     const name  = row.querySelector('.ing-name')?.value.trim();
     const batch = row.querySelector('.ing-batch')?.value.trim();
     const wt    = Number(row.querySelector('.ing-weight')?.value) || 0;
-    if (name) list.push({ name, batch: batch || '—', weight: wt });
+    if (name) list.push({ name, batch: batch || 'NIL', weight: wt });
   });
   return list;
 }
@@ -956,18 +961,16 @@ window.saveNewBatch = async function() {
   const dispatchQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
   const invoiceRef    = document.getElementById('n-dispatch-ref').value.trim();
 
-  // Ingredients (factory mode)
-  const ingredientsList = (processingDone === 'Yes' && procType === 'factory')
-    ? collectIngredients()
-    : [];
+  // Ingredients — both factory AND blend
+  const ingredientsList = processingDone === 'Yes' ? collectIngredients() : [];
+  const shortPct = procType === 'factory' ? Number(document.getElementById('factory-shortage-pct')?.value) || 9 : 0;
+  const ingTotalWt = ingredientsList.reduce((s, i) => s + i.weight, 0);
+  const blendShortage = procType === 'factory' ? +(ingTotalWt * shortPct / 100).toFixed(3) : 0;
   const otherIngredients = ingredientsList.length
-    ? ingredientsList.map(i => `${i.name} (${i.batch}, ${i.weight}kg)`).join('; ')
-    : (document.getElementById('n-blend-challan')?.value.trim() ? 'Blend — Challan: ' + document.getElementById('n-blend-challan').value.trim() : '—');
-
-  // Blend shortage
-  const blendShortage = (processingDone === 'Yes' && procType === 'blend')
-    ? +(purchaseQty * 0.09).toFixed(2)
-    : 0;
+    ? ingredientsList.map(i => i.name + ' (Lot: ' + i.batch + ') ' + i.weight + 'kg').join('; ')
+    : '—';
+  // Post-processing challan (Step 2)
+  const challanNo = document.getElementById('n-process-challan')?.value.trim() || '';
 
   // Balance = Finished Qty (or Purchase Qty) - Dispatch Qty
   const baseQty = totalFinishedQty > 0 ? totalFinishedQty : purchaseQty;
@@ -989,7 +992,7 @@ window.saveNewBatch = async function() {
     displayPurchaseDate: formatDate(d),
     productName,
     supplierName,
-    supplierBatch: supplierBatch || '—',
+    supplierBatch: supplierBatch || 'NIL',
     invoiceNo: invoiceNo || '—',
     challanNo: challanNo || '—',
     supplierGSTIN: supplierGSTIN || '—',
