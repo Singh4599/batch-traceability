@@ -1141,7 +1141,7 @@ window.saveNewBatch = async function() {
   const storageLocation = storageAlloc.length
     ? storageAlloc.map(a => `${a.location}${a.qty ? ' ('+a.qty+'kg)' : ''}`).join(', ')
     : 'Unspecified';
-  const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || netWeight || purchaseQty;
+  const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || 0; // 0 = not packed (Label Maker not used)
   const dispatchDate  = document.getElementById('n-dispatch-date').value;
   const dispatchQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
   const invoiceRef    = document.getElementById('n-dispatch-ref').value.trim();
@@ -1291,24 +1291,61 @@ window.openEditModal = function(id) {
 
   _currentEditBatch = b;
   document.getElementById('e-batch-id').value = b.id;
-  document.getElementById('edit-batch-sub').textContent = `Batch: ${b.finalBatchNo || '—'} &middot; ${b.productName}`;
+  document.getElementById('edit-batch-sub').textContent = `Batch: ${b.finalBatchNo || '—'} · ${b.productName}`;
 
-  document.getElementById('e-recall-status').value = b.recallStatus || 'Closed';
-  document.getElementById('e-complaint').value = b.complaint && b.complaint !== 'None' ? b.complaint : '';
-  document.getElementById('e-action-taken').value = b.actionTaken && b.actionTaken !== '—' ? b.actionTaken : '';
+  // ── PROCUREMENT ──
+  document.getElementById('e-product-name').value    = b.productName || '';
+  document.getElementById('e-final-batch-no').value  = b.finalBatchNo || '';
+  // purchase date: convert DD/MM/YYYY → YYYY-MM-DD
+  let purchDateInput = '';
+  if (b.purchaseDate) {
+    // stored as YYYY-MM-DD from form, or formatted DD/MM/YYYY
+    if (b.purchaseDate.includes('-')) purchDateInput = b.purchaseDate;
+    else { const p = b.purchaseDate.split('/'); if(p.length===3) purchDateInput = `${p[2]}-${p[1]}-${p[0]}`; }
+  }
+  document.getElementById('e-purchase-date').value   = purchDateInput;
+  document.getElementById('e-invoice-no').value      = b.invoiceNo && b.invoiceNo !== '—' ? b.invoiceNo : '';
+  document.getElementById('e-supplier-name').value   = b.supplierName || '';
+  document.getElementById('e-supplier-gstin').value  = b.supplierGSTIN && b.supplierGSTIN !== '—' ? b.supplierGSTIN : '';
+  document.getElementById('e-supplier-fssai').value  = b.supplierFSSAI && b.supplierFSSAI !== '—' ? b.supplierFSSAI : '';
+  document.getElementById('e-supplier-address').value= b.supplierAddress && b.supplierAddress !== '—' ? b.supplierAddress : '';
+  document.getElementById('e-supplier-batch').value  = b.supplierBatch && b.supplierBatch !== 'NIL' ? b.supplierBatch : '';
+  document.getElementById('e-purchase-qty').value    = b.purchaseQty || '';
 
-  // Dispatch fields
+  // ── PROCESSING ──
+  document.getElementById('e-net-weight').value   = b.netWeight || '';
+  document.getElementById('e-shortage').value     = b.blendShortage || '';
+  document.getElementById('e-challan-no').value   = b.challanNo && b.challanNo !== '—' ? b.challanNo : '';
+
+  // ── STORAGE ──
+  let repackInput = '';
+  if (b.repackingDate) {
+    const rp = b.repackingDate.split('/');
+    if (rp.length === 3) repackInput = `${rp[2]}-${rp[1]}-${rp[0]}`;
+  }
+  document.getElementById('e-repacking-date').value = repackInput;
+  // Try to set storage select (first location in breakdown or raw storageLocation)
+  const storageSel = document.getElementById('e-storage');
+  const storageVal = b.storageLocation || 'Dry Storage Room A';
+  // pick first option that partially matches, else default
+  const matchOpt = Array.from(storageSel.options).find(o => storageVal.toLowerCase().includes(o.value.toLowerCase()));
+  storageSel.value = matchOpt ? matchOpt.value : storageSel.options[0].value;
+
+  // ── DISPATCH ──
   let dispDateInput = '';
   if (b.dispatchDate && b.dispatchDate !== '—') {
     const parts = b.dispatchDate.split('/');
     if (parts.length === 3) dispDateInput = `${parts[2]}-${parts[1]}-${parts[0]}`;
   }
   document.getElementById('e-dispatch-date').value = dispDateInput;
-  document.getElementById('e-dispatch-qty').value = b.dispatchQty && b.dispatchQty !== '—' ? b.dispatchQty : '';
-  document.getElementById('e-dispatch-ref').value = b.invoiceRef && b.invoiceRef !== '—' ? b.invoiceRef : '';
+  document.getElementById('e-dispatch-qty').value  = b.dispatchQty && b.dispatchQty !== '—' ? b.dispatchQty : '';
+  document.getElementById('e-dispatch-ref').value  = b.invoiceRef && b.invoiceRef !== '—' ? b.invoiceRef : '';
 
-  document.getElementById('e-storage').value = b.storageLocation || 'Dry Storage Room A';
-  document.getElementById('e-verified-by').value = b.verifiedBy || 'Bhimlal Sharma';
+  // ── COMPLIANCE ──
+  document.getElementById('e-recall-status').value = b.recallStatus || 'Closed';
+  document.getElementById('e-complaint').value     = b.complaint && b.complaint !== 'None' ? b.complaint : '';
+  document.getElementById('e-action-taken').value  = b.actionTaken && b.actionTaken !== '—' ? b.actionTaken : '';
+  document.getElementById('e-verified-by').value   = b.verifiedBy || 'Bhimlal Sharma';
 
   updateEditBalancePreview();
   document.getElementById('edit-modal-overlay').style.display = 'flex';
@@ -1321,7 +1358,12 @@ window.closeEditModal = function() {
 
 window.updateEditBalancePreview = function() {
   if (!_currentEditBatch) return;
-  const baseQty = Number(_currentEditBatch.totalFinishedQty) || Number(_currentEditBatch.purchaseQty) || 0;
+  // Use what's currently typed in e-net-weight, fallback to stored values
+  const netWtField = Number(document.getElementById('e-net-weight')?.value);
+  const baseQty = netWtField > 0 ? netWtField
+    : Number(_currentEditBatch.netWeight)
+    || Number(_currentEditBatch.totalFinishedQty)
+    || Number(_currentEditBatch.purchaseQty) || 0;
   const dQty = Number(document.getElementById('e-dispatch-qty').value) || 0;
   const newBal = Number((baseQty - dQty).toFixed(2));
 
@@ -1338,27 +1380,67 @@ window.saveBatchEdit = async function() {
   const idx = allBatches.findIndex(x => x.id === id);
   if (idx === -1) return;
 
-  const recallStatus = document.getElementById('e-recall-status').value;
-  const complaint = document.getElementById('e-complaint').value.trim() || 'None';
-  const actionTaken = document.getElementById('e-action-taken').value.trim() || '—';
-  const dispatchDateRaw = document.getElementById('e-dispatch-date').value;
-  const dispatchQty = Number(document.getElementById('e-dispatch-qty').value) || 0;
-  const invoiceRef = document.getElementById('e-dispatch-ref').value.trim();
-  const storageLocation = document.getElementById('e-storage').value;
-  const verifiedBy = document.getElementById('e-verified-by').value.trim() || 'Bhimlal Sharma';
+  // ── Read all fields ──
+  const productName   = document.getElementById('e-product-name').value.trim() || _currentEditBatch.productName;
+  const finalBatchNo  = document.getElementById('e-final-batch-no').value.trim() || _currentEditBatch.finalBatchNo;
+  const purchaseDateRaw = document.getElementById('e-purchase-date').value;
+  const invoiceNo     = document.getElementById('e-invoice-no').value.trim() || '—';
+  const supplierName  = document.getElementById('e-supplier-name').value.trim() || _currentEditBatch.supplierName;
+  const supplierGSTIN = document.getElementById('e-supplier-gstin').value.trim() || '—';
+  const supplierFSSAI = document.getElementById('e-supplier-fssai').value.trim() || '—';
+  const supplierAddress = document.getElementById('e-supplier-address').value.trim() || '—';
+  const supplierBatch = document.getElementById('e-supplier-batch').value.trim() || 'NIL';
+  const purchaseQty   = Number(document.getElementById('e-purchase-qty').value) || _currentEditBatch.purchaseQty || 0;
 
-  const baseQty = Number(_currentEditBatch.totalFinishedQty) || Number(_currentEditBatch.purchaseQty) || 0;
+  const netWeight     = Number(document.getElementById('e-net-weight').value) || _currentEditBatch.netWeight || 0;
+  const blendShortage = Number(document.getElementById('e-shortage').value) || 0;
+  const challanNo     = document.getElementById('e-challan-no').value.trim() || '—';
+
+  const repackDateRaw = document.getElementById('e-repacking-date').value;
+  const storageLocation = document.getElementById('e-storage').value;
+
+  const dispatchDateRaw = document.getElementById('e-dispatch-date').value;
+  const dispatchQty   = Number(document.getElementById('e-dispatch-qty').value) || 0;
+  const invoiceRef    = document.getElementById('e-dispatch-ref').value.trim();
+
+  const recallStatus  = document.getElementById('e-recall-status').value;
+  const complaint     = document.getElementById('e-complaint').value.trim() || 'None';
+  const actionTaken   = document.getElementById('e-action-taken').value.trim() || '—';
+  const verifiedBy    = document.getElementById('e-verified-by').value.trim() || 'Bhimlal Sharma';
+
+  // Balance = netWeight - dispatchQty
+  const baseQty = netWeight > 0 ? netWeight : Number(_currentEditBatch.totalFinishedQty) || purchaseQty;
   const balanceStock = Number((baseQty - dispatchQty).toFixed(2));
 
   const updatedRecord = {
     ..._currentEditBatch,
-    recallStatus,
-    complaint,
-    actionTaken,
+    // Procurement
+    productName,
+    finalBatchNo,
+    purchaseDate: purchaseDateRaw || _currentEditBatch.purchaseDate,
+    displayPurchaseDate: purchaseDateRaw ? formatDate(new Date(purchaseDateRaw + 'T00:00:00')) : _currentEditBatch.displayPurchaseDate,
+    invoiceNo,
+    supplierName,
+    supplierGSTIN,
+    supplierFSSAI,
+    supplierAddress,
+    supplierBatch,
+    purchaseQty,
+    // Processing
+    netWeight,
+    blendShortage,
+    challanNo,
+    // Storage
+    repackingDate: repackDateRaw ? formatDate(new Date(repackDateRaw + 'T00:00:00')) : (_currentEditBatch.repackingDate || '—'),
+    storageLocation,
+    // Dispatch
     dispatchDate: dispatchDateRaw ? formatDate(new Date(dispatchDateRaw + 'T00:00:00')) : (_currentEditBatch.dispatchDate || '—'),
     dispatchQty: dispatchQty || '—',
     invoiceRef: invoiceRef || (dispatchQty > 0 ? `DIS/${String(allBatches.length).padStart(4, '0')}` : '—'),
-    storageLocation,
+    // Compliance
+    recallStatus,
+    complaint,
+    actionTaken,
     verifiedBy,
     balanceStock,
     updatedAt: Date.now()
@@ -1375,7 +1457,6 @@ window.saveBatchEdit = async function() {
   allBatches[idx] = updatedRecord;
   saveLocal(allBatches);
 
-  // Update in filtered list
   const fIdx = filteredBatches.findIndex(x => x.id === id);
   if (fIdx !== -1) filteredBatches[fIdx] = updatedRecord;
 
@@ -1384,7 +1465,7 @@ window.saveBatchEdit = async function() {
   openBatch(id);
   closeEditModal();
 
-  showToast(ok ? `✅ Batch ${_currentEditBatch.finalBatchNo} updated and synced!` : `Batch updated locally.`);
+  showToast(ok ? `✅ Batch ${finalBatchNo} updated and synced!` : `Batch updated locally.`);
 };
 
 // ── EXPORT EXCEL & PRINT ─────────────────────────────────────────────────────
