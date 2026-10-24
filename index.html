@@ -16,43 +16,43 @@
 <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 <div id="toast" class="toast"></div>
 
-<!-- NEW BATCH ENTRY MODAL (4-Step Wizard) -->
+<!-- NEW BATCH ENTRY MODAL (5-Step Wizard) -->
 <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
-  <div class="modal-box" style="max-width:640px;">
+  <div class="modal-box" style="max-width:660px;">
     <div class="modal-header">
       <div>
         <div class="modal-title-wrap">
           <span class="modal-icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
-          <h3 id="modal-step-title">Purchase Details</h3>
+          <h3 id="modal-step-title">&#x1F4CB; Purchase &amp; Quality Check</h3>
         </div>
-        <div id="modal-step-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px;margin-left:32px;">Step 1 of 4 — Scan or enter invoice details</div>
+        <div id="modal-step-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px;margin-left:32px;">Step 1 of 5 &#x2014; Supplier details, receiving QC &amp; internal RM batch</div>
       </div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
-    <!-- Step progress bar -->
+    <!-- Step progress bar (5 dots) -->
     <div class="modal-steps-bar">
       <div class="modal-step active" id="bstep-dot-0"></div>
       <div class="modal-step" id="bstep-dot-1"></div>
       <div class="modal-step" id="bstep-dot-2"></div>
       <div class="modal-step" id="bstep-dot-3"></div>
+      <div class="modal-step" id="bstep-dot-4"></div>
     </div>
 
-    <div class="modal-body" style="padding-top:14px;">
+    <div class="modal-body" style="padding-top:14px;max-height:72vh;overflow-y:auto;">
 
-      <!-- ── STEP 0: PURCHASE DETAILS (OCR + manual) ── -->
+      <!-- STEP 0: PURCHASE & QUALITY CHECK -->
       <div class="modal-step-panel" id="bpanel-0">
+
         <!-- OCR SCAN STRIP -->
         <div class="autofill-banner" style="cursor:pointer;" onclick="document.getElementById('ocr-file-input').click()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
-          <span class="autofill-label" id="ocr-scan-label">📷 Scan Purchase Invoice / Challan with AI (tap to upload)</span>
+          <span class="autofill-label" id="ocr-scan-label">&#x1F4F7; Scan Purchase Invoice / Challan with AI (tap to upload)</span>
           <input type="file" id="ocr-file-input" accept="image/*,application/pdf" style="display:none;" onchange="onOCRFileSelected(this)">
           <div id="ocr-progress-bar" style="display:none;flex:1;height:4px;background:#E2E8F0;border-radius:2px;overflow:hidden;margin-left:8px;"><div id="ocr-progress-fill" style="height:100%;width:0%;background:var(--brand-primary);transition:width 0.3s;border-radius:2px;"></div></div>
         </div>
-
-        <!-- Multi-Item Invoice Picker -->
         <div id="ocr-items-picker" class="ocr-items-picker hidden">
-          <div class="ocr-items-picker-title"><span>📋 Multiple items found — Click an item to populate:</span></div>
+          <div class="ocr-items-picker-title"><span>&#x1F4CB; Multiple items found &#x2014; Click an item to populate:</span></div>
           <div id="ocr-items-chips-wrap"></div>
         </div>
         <div id="ocr-thumb-row" style="display:none;margin:8px 0 10px;padding:8px 10px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;align-items:center;gap:10px;">
@@ -60,121 +60,236 @@
           <span id="ocr-thumb-label" style="font-size:11px;color:var(--text-secondary);font-weight:500;"></span>
         </div>
 
-        <!-- Row 1: Date + Invoice + Challan -->
-        <div style="display:flex;gap:12px;margin-top:6px;">
-          <div class="form-row" style="flex:1">
+        <!-- Section A: SUPPLIER / PURCHASE -->
+        <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 8px;padding:6px 10px;background:#EFF6FF;border-radius:6px;">
+          &#x1F4CB; A &#x2014; Supplier / Raw Material Purchase
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:12px;">
+          <div class="form-row">
             <label>Purchase Date *</label>
             <input type="date" id="n-purchase-date" onchange="onDateOrProductChange()" />
           </div>
-          <div class="form-row" style="flex:2">
+          <div class="form-row">
             <label>Invoice / Bill No. *</label>
-            <input type="text" id="n-invoice" placeholder="e.g. INV/2026/001" />
+            <input type="text" id="n-invoice" placeholder="e.g. PI-4587" />
           </div>
         </div>
 
-        <!-- Row 2: Supplier Name + Batch -->
-        <div style="display:flex;gap:12px;margin-top:10px;">
-          <div class="form-row" style="flex:2">
+        <div style="display:grid;grid-template-columns:2fr 1.5fr;gap:12px;margin-top:10px;">
+          <div class="form-row">
             <label>Supplier Name *</label>
-            <input type="text" id="n-supplier" placeholder="e.g. Vijay Masala Wholesale" />
+            <input type="text" id="n-supplier" placeholder="e.g. ABC Spices Pvt. Ltd." />
           </div>
-          <div class="form-row" style="flex:1.5">
+          <div class="form-row">
             <label>Supplier Batch / Lot No.</label>
-            <input type="text" id="n-supplier-batch" placeholder="Leave blank if NIL" />
+            <input type="text" id="n-supplier-batch" placeholder="e.g. CS-2026-01" />
           </div>
         </div>
 
-        <!-- Row 3: Supplier GSTIN + FSSAI -->
-        <div style="display:flex;gap:12px;margin-top:10px;">
-          <div class="form-row" style="flex:1.5">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
+          <div class="form-row">
             <label>Supplier GSTIN</label>
             <input type="text" id="n-supplier-gstin" placeholder="e.g. 07AABCU9603R1ZX" maxlength="15" style="text-transform:uppercase;" />
           </div>
-          <div class="form-row" style="flex:1.5">
+          <div class="form-row">
             <label>Supplier FSSAI No.</label>
             <input type="text" id="n-supplier-fssai" placeholder="e.g. 10014011000123" maxlength="14" />
           </div>
         </div>
 
-        <!-- Row 4: Supplier Address -->
-        <div style="display:flex;gap:12px;margin-top:10px;">
-          <div class="form-row" style="flex:1">
-            <label>Supplier Address</label>
-            <input type="text" id="n-supplier-address" placeholder="e.g. 12, Spice Market, Khari Baoli, Delhi" />
-          </div>
+        <div class="form-row" style="margin-top:10px;">
+          <label>Supplier Address</label>
+          <input type="text" id="n-supplier-address" placeholder="e.g. 12, Spice Market, Khari Baoli, Delhi" />
         </div>
 
-        <!-- Row 5: Product + Qty -->
-        <div style="display:flex;gap:12px;margin-top:10px;">
-          <div class="form-row" style="flex:2">
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:10px;">
+          <div class="form-row">
             <label>Product / Raw Material Name *</label>
-            <input type="text" id="n-product" placeholder="e.g. Chilli Flakes" list="product-datalist" oninput="onProductInput(this.value)" onchange="onProductInput(this.value)" />
+            <input type="text" id="n-product" placeholder="e.g. Cumin Seeds" list="product-datalist" oninput="onProductInput(this.value)" onchange="onProductInput(this.value)" />
             <datalist id="product-datalist"></datalist>
           </div>
-          <div class="form-row" style="flex:1">
-            <label>Purchase Qty (kg)</label>
-            <input type="number" id="n-qty" placeholder="100" min="0" oninput="recalcNetWeight();updateBalancePreview();" />
+          <div class="form-row">
+            <label>Quantity Purchased (KG) *</label>
+            <input type="number" id="n-qty" placeholder="e.g. 1000" min="0" oninput="recalcNetWeight();updateBalancePreview();" />
           </div>
         </div>
-      </div>
 
-      <!-- ── STEP 1: PROCESSING / BATCH NO ── -->
+        <!-- Section B: RECEIVING & QUALITY CHECK -->
+        <div style="font-size:11px;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding:6px 10px;background:#ECFDF5;border-radius:6px;">
+          &#x2705; B &#x2014; Raw Material Receiving &amp; Quality Check
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-row">
+            <label>Receiving Date</label>
+            <input type="date" id="n-receiving-date" />
+          </div>
+          <div class="form-row">
+            <label>Internal RM Batch No.</label>
+            <input type="text" id="n-rm-batch-no" placeholder="e.g. RM-CUMIN-001" />
+            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Auto-generated or enter manually</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
+          <div class="form-row">
+            <label>Qty Received (KG)</label>
+            <input type="number" id="n-qty-received" placeholder="e.g. 1000" min="0" step="any" oninput="onQCQtyChange()" />
+          </div>
+          <div class="form-row">
+            <label>Qty Accepted (KG)</label>
+            <input type="number" id="n-qty-accepted" placeholder="e.g. 990" min="0" step="any" oninput="onQCQtyChange()" />
+          </div>
+          <div class="form-row">
+            <label>Qty Rejected (KG)</label>
+            <input type="number" id="n-qty-rejected" placeholder="Auto" min="0" step="any" style="background:#FEF2F2;" readonly />
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
+          <div class="form-row">
+            <label>Quality Check Status</label>
+            <select id="n-qc-status">
+              <option value="Approved">&#x2705; Approved</option>
+              <option value="Conditional">&#x26A0;&#xFE0F; Conditional Approval</option>
+              <option value="Rejected">&#x274C; Rejected</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Inward Storage Location</label>
+            <select id="n-inward-storage">
+              <option>Dry Storage Room A</option>
+              <option>Dry Storage Room B</option>
+              <option>Cold Storage</option>
+              <option>Shop / Retail</option>
+              <option>Packing Area Store</option>
+            </select>
+          </div>
+        </div>
+
+      </div><!-- end bpanel-0 -->
+
+      <!-- STEP 1: PROCESSING -->
       <div class="modal-step-panel hidden" id="bpanel-1">
 
-        <!-- Processing Done toggle -->
         <div style="display:flex;gap:12px;align-items:flex-start;">
           <div class="form-row" style="flex:1.2">
-            <label>Processing Done (Yes/No)</label>
+            <label>Processing Required?</label>
             <select id="n-processing" onchange="onProcessingChange(this.value)">
-              <option value="No">No (direct repacking)</option>
-              <option value="Yes">Yes (processed / blended)</option>
+              <option value="No">No (Direct Repacking &#x2014; no processing)</option>
+              <option value="Yes">Yes (Factory / In-House processing)</option>
             </select>
-            <div id="processing-auto-hint" style="font-size:10px;color:var(--accent-green-dark);font-weight:600;margin-top:3px;display:none;">⚡ Mix/Blend masala detected → Auto-set to Yes</div>
+            <div id="processing-auto-hint" style="font-size:10px;color:var(--accent-green-dark);font-weight:600;margin-top:3px;display:none;">&#x26A1; Mix/Blend masala detected &#x2192; Auto-set to Yes</div>
           </div>
         </div>
 
-        <!-- Factory or Blend toggle — shown when Processing = Yes -->
+        <!-- Direct Repacking (NO) -->
+        <div id="direct-repacking-info" style="display:none;margin-top:12px;padding:12px 14px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;">
+          <div style="font-size:11px;font-weight:700;color:#92400E;margin-bottom:8px;">&#x1F4E6; DIRECT REPACKING &#x2014; No Processing</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-row">
+              <label>RM Batch Number</label>
+              <input type="text" id="n-direct-rm-batch" placeholder="e.g. RM-001" style="background:#FEF9C3;" />
+            </div>
+            <div class="form-row">
+              <label>Quantity Available (KG)</label>
+              <input type="number" id="n-direct-qty" placeholder="e.g. 200" min="0" step="any" oninput="recalcNetWeight();updateBalancePreview();" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Factory or In-House toggle (shown when Processing = Yes) -->
         <div id="processing-type-row" style="display:none;margin-top:12px;padding:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
-          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">SELECT PROCESSING TYPE</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">WHERE IS PROCESSING CARRIED OUT?</div>
           <div style="display:flex;gap:10px;">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:10px 14px;border-radius:8px;border:2px solid #E2E8F0;font-weight:600;font-size:13px;flex:1;justify-content:center;transition:all 0.15s;" id="lbl-factory">
               <input type="radio" name="proc-type" value="factory" onchange="onProcTypeChange('factory')" style="accent-color:var(--brand-primary);">
-              🏭 Factory <span style="font-weight:400;font-size:11px;margin-left:4px;">(Grind + new ingredients added)</span>
+              &#x1F3ED; External Factory <span style="font-weight:400;font-size:11px;margin-left:4px;">(Job Work)</span>
             </label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:10px 14px;border-radius:8px;border:2px solid #E2E8F0;font-weight:600;font-size:13px;flex:1;justify-content:center;transition:all 0.15s;" id="lbl-blend">
               <input type="radio" name="proc-type" value="blend" onchange="onProcTypeChange('blend')" style="accent-color:var(--brand-primary);">
-              🌀 Blend <span style="font-weight:400;font-size:11px;margin-left:4px;">(Mix diff ingredients together)</span>
+              &#x1F3EA; In-House <span style="font-weight:400;font-size:11px;margin-left:4px;">(Shop Processing)</span>
             </label>
           </div>
 
-          <!-- Shared ingredient table — shown for BOTH factory and blend -->
-          <div id="ingredients-section" style="display:none;margin-top:14px;">
+          <!-- Factory extra fields -->
+          <div id="factory-extra-fields" style="display:none;margin-top:12px;padding:10px;background:#EEF2FF;border-radius:8px;border:1px solid #C7D2FE;">
+            <div style="font-size:11px;font-weight:700;color:#4338CA;margin-bottom:8px;">&#x1F3ED; Factory / Job Work Details</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="form-row">
+                <label>Factory / Mill Name</label>
+                <input type="text" id="n-factory-name" placeholder="e.g. XYZ Grinding Mill" />
+              </div>
+              <div class="form-row">
+                <label>Job Work Challan No.</label>
+                <input type="text" id="n-process-challan" placeholder="e.g. JW-1254" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+              <div class="form-row">
+                <label>Dispatch Date to Factory</label>
+                <input type="date" id="n-dispatch-to-factory" />
+              </div>
+              <div class="form-row">
+                <label>Processing Completion Date</label>
+                <input type="date" id="n-completion-date" />
+              </div>
+            </div>
+          </div>
 
-            <!-- Factory: editable shortage % -->
+          <!-- In-house extra fields -->
+          <div id="inhouse-extra-fields" style="display:none;margin-top:12px;padding:10px;background:#F0FDF4;border-radius:8px;border:1px solid #86EFAC;">
+            <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:8px;">&#x1F3EA; In-House Processing Details</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="form-row">
+                <label>Processing Location</label>
+                <input type="text" id="n-inhouse-location" placeholder="e.g. Shop Grinding Unit" />
+              </div>
+              <div class="form-row">
+                <label>Processing / Completion Date</label>
+                <input type="date" id="n-completion-date-inhouse" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Batch No + Net Weight (both types) -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+            <div class="form-row">
+              <label>Processing / Final Batch No. *</label>
+              <input type="text" id="n-final-batch" placeholder="e.g. MIX-001 / GR-001" />
+              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" id="batch-hint">Auto-generated or enter manually</div>
+            </div>
+            <div class="form-row">
+              <label>Net Weight (kg) &#x2014; <span style="color:#059669;font-weight:700;" id="net-wt-auto-label">Auto</span></label>
+              <input type="number" id="n-net-weight" placeholder="Auto-calculated" min="0" step="any" oninput="onNetWeightChange()" style="font-weight:700;" />
+              <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" id="net-wt-hint">Enter manually or calculated from ingredients</div>
+            </div>
+          </div>
+
+          <!-- Ingredient table -->
+          <div id="ingredients-section" style="display:none;margin-top:14px;">
             <div id="factory-info-bar" style="display:none;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:8px;padding:10px 14px;margin-bottom:10px;">
               <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div style="font-size:12px;font-weight:700;color:#4338CA;">🏭 Factory Processing Loss</div>
+                <div style="font-size:12px;font-weight:700;color:#4338CA;">&#x1F3ED; Processing Loss %</div>
                 <div style="display:flex;align-items:center;gap:6px;">
                   <input type="number" id="factory-shortage-pct" value="9" min="0" max="50" step="0.1"
                     style="width:60px;padding:4px 8px;border:1px solid #C7D2FE;border-radius:6px;font-weight:700;font-size:13px;color:#4338CA;text-align:center;"
                     oninput="recalcNetWeight()" />
-                  <span style="font-size:12px;color:#4338CA;font-weight:600;">% grinding loss</span>
+                  <span style="font-size:12px;color:#4338CA;font-weight:600;">% loss</span>
                 </div>
-                <div style="font-size:11px;color:#6366F1;">Net Wt = Σ Ingredients − Loss%</div>
+                <div style="font-size:11px;color:#6366F1;">Net Wt = Sigma Ingredients minus Loss%</div>
               </div>
             </div>
-
-            <!-- Blend: no loss notice -->
             <div id="blend-info-bar" style="display:none;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;margin-bottom:10px;">
-              <div style="font-size:12px;font-weight:700;color:#166534;">🌀 Blend Processing — No Grinding Loss</div>
-              <div style="font-size:11px;color:#166534;margin-top:2px;">Net Weight = Total of all ingredient weights added below</div>
+              <div style="font-size:12px;font-weight:700;color:#166534;">&#x1F3EA; In-House Processing &#x2014; No Loss by default</div>
+              <div style="font-size:11px;color:#166534;margin-top:2px;">Net Weight = Total of all ingredient weights below</div>
             </div>
 
-            <!-- Ingredient rows table -->
-            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">INGREDIENTS / RAW MATERIALS USED</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;">INGREDIENT-WISE BATCH &amp; QUANTITY</div>
             <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:4px;padding:0 4px;">
               <span style="font-size:10px;font-weight:700;color:#94A3B8;">INGREDIENT NAME</span>
-              <span style="font-size:10px;font-weight:700;color:#94A3B8;">BATCH / LOT NO.</span>
+              <span style="font-size:10px;font-weight:700;color:#94A3B8;">RM BATCH NO.</span>
               <span style="font-size:10px;font-weight:700;color:#94A3B8;">WEIGHT (kg)</span>
               <span></span>
             </div>
@@ -183,7 +298,7 @@
                 <input type="text" placeholder="e.g. Red Chilli" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" />
                 <input type="text" placeholder="NIL if none" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" />
                 <input type="number" placeholder="0" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" oninput="recalcNetWeight()" />
-                <button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">✕</button>
+                <button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">&#x2715;</button>
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
@@ -192,94 +307,139 @@
             </div>
           </div>
 
-          <!-- Post-processing Challan No -->
-          <div id="post-challan-row" style="display:none;margin-top:10px;">
+          <!-- Processing Output & Shortage -->
+          <div id="processing-output-section" style="display:none;margin-top:14px;padding:12px;background:#FFF1F2;border:1px solid #FECDD3;border-radius:10px;">
+            <div style="font-size:11px;font-weight:700;color:#BE123C;margin-bottom:10px;">&#x26A0;&#xFE0F; Processing Output &amp; Shortage</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+              <div class="form-row">
+                <label>Total Input Qty (KG)</label>
+                <input type="number" id="n-total-input" placeholder="Auto" readonly style="background:#F9FAFB;font-weight:700;" />
+              </div>
+              <div class="form-row">
+                <label>Total Output / Net Wt (KG)</label>
+                <input type="number" id="n-total-output" placeholder="Auto" style="font-weight:700;color:#059669;" oninput="onOutputQtyChange()" />
+              </div>
+              <div class="form-row">
+                <label>Shortage Qty (KG)</label>
+                <input type="number" id="n-shortage-qty" placeholder="Auto" readonly style="background:#FEF2F2;font-weight:700;color:#DC2626;" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+              <div class="form-row">
+                <label>Reason for Shortage</label>
+                <input type="text" id="n-shortage-reason" placeholder="e.g. moisture loss, husk removal" />
+              </div>
+              <div class="form-row">
+                <label>Quality Approval Status</label>
+                <select id="n-quality-approval">
+                  <option value="Approved">&#x2705; Approved</option>
+                  <option value="Conditional">&#x26A0;&#xFE0F; Conditional</option>
+                  <option value="Rejected">&#x274C; Rejected</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Repacking date for processing path -->
+          <div style="margin-top:12px;">
             <div class="form-row">
-              <label>Challan No. (After Processing) 📦</label>
-              <input type="text" id="n-process-challan" placeholder="e.g. PCH/2026/001 — Delivery challan for processed batch" />
+              <label>Repacking / Processing Date</label>
+              <input type="date" id="n-repack-date" />
             </div>
           </div>
-        </div>
 
-        <!-- Batch No + Processing Date + Net Weight -->
-        <div style="display:flex;gap:12px;margin-top:12px;">
-          <div class="form-row" style="flex:1">
-            <label>Final Batch No. *</label>
-            <input type="text" id="n-final-batch" placeholder="e.g. CF-1026" />
-            <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" id="batch-hint">Auto-generated from product abbreviation + month-year (CF-1026 style)</div>
-          </div>
-          <div class="form-row" style="flex:1">
-            <label>Repacking / Processing Date</label>
-            <input type="date" id="n-repack-date" />
-          </div>
-          <div class="form-row" style="flex:1">
-            <label>Net Weight (kg) — <span style="color:#059669;font-weight:700;" id="net-wt-auto-label">Auto</span></label>
-            <input type="number" id="n-net-weight" placeholder="Auto-calculated" min="0" step="any" oninput="onNetWeightChange()" style="font-weight:700;" />
-            <div style="font-size:10px;color:var(--text-muted);margin-top:3px;" id="net-wt-hint">Enter manually or add ingredients above</div>
-          </div>
-        </div>
+        </div><!-- end processing-type-row -->
 
-        <!-- Storage Allocation -->
-        <div style="margin-top:12px;">
-          <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">STORAGE ALLOCATION</div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;" id="storage-allocation-rows">
-            <div style="flex:1;min-width:150px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px;">
-              <label style="font-size:11px;font-weight:700;color:#1E293B;display:flex;align-items:center;gap:5px;">
-                <input type="checkbox" id="store-dry" onchange="onStorageCheck()" style="accent-color:var(--brand-primary);"> 📦 Dry Storage
-              </label>
-              <select id="store-dry-room" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;" disabled>
-                <option>Dry Storage Room A</option>
-                <option>Dry Storage Room B</option>
-                <option>Packing Area Store</option>
-              </select>
-              <input type="number" id="store-dry-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
-            </div>
-            <div style="flex:1;min-width:150px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:10px;">
-              <label style="font-size:11px;font-weight:700;color:#0369A1;display:flex;align-items:center;gap:5px;">
-                <input type="checkbox" id="store-cold" onchange="onStorageCheck()" style="accent-color:#0369A1;"> ❄️ Cold Storage
-              </label>
-              <input type="number" id="store-cold-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #BAE6FD;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
-            </div>
-            <div style="flex:1;min-width:150px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px;">
-              <label style="font-size:11px;font-weight:700;color:#92400E;display:flex;align-items:center;gap:5px;">
-                <input type="checkbox" id="store-shop" onchange="onStorageCheck()" style="accent-color:#D97706;"> 🏪 Shop / Retail
-              </label>
-              <input type="number" id="store-shop-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #FED7AA;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
-            </div>
-          </div>
-          <div id="storage-balance-hint" style="margin-top:8px;font-size:11px;color:#64748B;"></div>
-        </div>
+      </div><!-- end bpanel-1 -->
 
-      </div>
-
-      <!-- ── STEP 2: PACKING QTY (from Label Maker) ── -->
+      <!-- STEP 2: STORAGE ALLOCATION -->
       <div class="modal-step-panel hidden" id="bpanel-2">
+        <div style="margin-bottom:10px;padding:10px 12px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;font-size:12px;color:#0369A1;">
+          <strong>&#x1F5C4;&#xFE0F; Storage Allocation</strong> &#x2014; Allocate the available stock after processing or direct repacking
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="form-row">
+            <label>Total Available Qty (KG)</label>
+            <input type="number" id="n-total-available" placeholder="Auto from Net Weight" readonly style="font-weight:700;background:#F9FAFB;" />
+          </div>
+          <div class="form-row">
+            <label>Transfer Date</label>
+            <input type="date" id="n-transfer-date" />
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:14px;">
+          <label>Stock Movement Reference No.</label>
+          <input type="text" id="n-stock-ref" placeholder="e.g. SM-2026-001" />
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;">STORAGE BREAKDOWN</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;" id="storage-allocation-rows">
+          <div style="flex:1;min-width:150px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px;">
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:flex;align-items:center;gap:5px;">
+              <input type="checkbox" id="store-dry" onchange="onStorageCheck()" style="accent-color:var(--brand-primary);"> &#x1F4E6; Dry Storage
+            </label>
+            <select id="store-dry-room" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;" disabled>
+              <option>Dry Storage Room A</option>
+              <option>Dry Storage Room B</option>
+              <option>Packing Area Store</option>
+            </select>
+            <input type="number" id="store-dry-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+          </div>
+          <div style="flex:1;min-width:150px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:10px;">
+            <label style="font-size:11px;font-weight:700;color:#0369A1;display:flex;align-items:center;gap:5px;">
+              <input type="checkbox" id="store-cold" onchange="onStorageCheck()" style="accent-color:#0369A1;"> &#x2744;&#xFE0F; Cold Storage
+            </label>
+            <input type="number" id="store-cold-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #BAE6FD;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+          </div>
+          <div style="flex:1;min-width:150px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px;">
+            <label style="font-size:11px;font-weight:700;color:#92400E;display:flex;align-items:center;gap:5px;">
+              <input type="checkbox" id="store-shop" onchange="onStorageCheck()" style="accent-color:#D97706;"> &#x1F3EA; Shop / Retail
+            </label>
+            <input type="number" id="store-shop-qty" placeholder="Qty (kg)" min="0" step="any" style="width:100%;margin-top:6px;padding:6px;border:1px solid #FED7AA;border-radius:6px;font-size:12px;box-sizing:border-box;" disabled oninput="onStorageQtyChange()" />
+          </div>
+        </div>
+        <div id="storage-balance-hint" style="margin-top:8px;font-size:11px;color:#64748B;"></div>
+      </div><!-- end bpanel-2 -->
+
+      <!-- STEP 3: PACKING / LABEL MAKER -->
+      <div class="modal-step-panel hidden" id="bpanel-3">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="form-row">
+            <label>Packing Batch No. (PK-)</label>
+            <input type="text" id="n-packing-batch-no" placeholder="e.g. PK-001" />
+          </div>
+          <div class="form-row">
+            <label>Packing Date</label>
+            <input type="date" id="n-packing-date" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="form-row">
+            <label>Bulk Qty Used for Packing (KG)</label>
+            <input type="number" id="n-bulk-qty-used" placeholder="e.g. 180" min="0" step="any" oninput="onBulkQtyChange()" />
+          </div>
+          <div class="form-row">
+            <label>Expiry / Best Before Date</label>
+            <input type="date" id="n-expiry-date" />
+          </div>
+        </div>
+
         <!-- Live Label Maker DB Card -->
         <div class="label-stats-box" id="label-live-stats-box">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-size:12px;font-weight:700;color:#166534;display:flex;align-items:center;gap:6px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Label Maker Database (Dukan Bai Stickers)</span>
+              <span>Label Maker Database (Live)</span>
             </div>
-            <button type="button" class="btn-ghost" style="padding:3px 8px;font-size:10.5px;background:#DCFCE7;border-color:#86EFAC;color:#166534;" onclick="applyLabelStats()">⚡ Auto-Fill From DB</button>
+            <button type="button" class="btn-ghost" style="padding:3px 8px;font-size:10.5px;background:#DCFCE7;border-color:#86EFAC;color:#166534;" onclick="applyLabelStats()">&#x26A1; Auto-Fill From DB</button>
           </div>
           <div class="label-stats-grid">
-            <div class="label-stat-pill">
-              <div class="label-stat-pill-num" id="lbl-p100">0</div>
-              <div class="label-stat-pill-lbl">100g Pouches</div>
-            </div>
-            <div class="label-stat-pill">
-              <div class="label-stat-pill-num" id="lbl-p200">0</div>
-              <div class="label-stat-pill-lbl">200g Pouches</div>
-            </div>
-            <div class="label-stat-pill">
-              <div class="label-stat-pill-num" id="lbl-p500">0</div>
-              <div class="label-stat-pill-lbl">500g Pouches</div>
-            </div>
-            <div class="label-stat-pill">
-              <div class="label-stat-pill-num" id="lbl-p1000">0</div>
-              <div class="label-stat-pill-lbl">1kg Pouches</div>
-            </div>
+            <div class="label-stat-pill"><div class="label-stat-pill-num" id="lbl-p100">0</div><div class="label-stat-pill-lbl">100g Pouches</div></div>
+            <div class="label-stat-pill"><div class="label-stat-pill-num" id="lbl-p200">0</div><div class="label-stat-pill-lbl">200g Pouches</div></div>
+            <div class="label-stat-pill"><div class="label-stat-pill-num" id="lbl-p500">0</div><div class="label-stat-pill-lbl">500g Pouches</div></div>
+            <div class="label-stat-pill"><div class="label-stat-pill-num" id="lbl-p1000">0</div><div class="label-stat-pill-lbl">1kg Pouches</div></div>
           </div>
           <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#166534;">
             <span>Total Printed Packages: <strong id="lbl-total-pcs">0</strong></span>
@@ -288,63 +448,91 @@
         </div>
 
         <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-secondary);">Individual Print Batches (tap any to select):</div>
-        <div id="label-pkg-list" style="max-height:140px;overflow-y:auto;border:1px solid var(--border-light);border-radius:8px;margin-bottom:12px;background:#FFFFFF;"></div>
-        
-        <div style="display:flex;gap:12px;">
-          <div class="form-row" style="flex:1">
-            <label>Total Finished / Packed Qty (kg) *</label>
-            <input type="number" id="n-total-finished" placeholder="e.g. 50" min="0" step="any" oninput="updateBalancePreview()" />
-          </div>
-          <div class="form-row" style="flex:1">
-            <label>No. of Packages (pouches count)</label>
-            <input type="number" id="n-pkg-count" placeholder="e.g. 40" min="0" />
-          </div>
-        </div>
-      </div>
+        <div id="label-pkg-list" style="max-height:120px;overflow-y:auto;border:1px solid var(--border-light);border-radius:8px;margin-bottom:12px;background:#FFFFFF;"></div>
 
-      <!-- ── STEP 3: DISPATCH ── -->
-      <div class="modal-step-panel hidden" id="bpanel-3">
-        <div style="margin-bottom:10px;padding:10px 12px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;font-size:12px;color:#92400E;">
-          <strong>🚚 Dispatch Details</strong> (leave blank if batch is not dispatched yet)
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div class="form-row">
+            <label>Total Packed Qty (KG)</label>
+            <input type="number" id="n-total-finished" placeholder="e.g. 178" min="0" step="any" oninput="updateBalancePreview();onBulkQtyChange();" />
+          </div>
+          <div class="form-row">
+            <label>Packing Loss / Wastage (KG)</label>
+            <input type="number" id="n-packing-loss" placeholder="Auto" readonly style="background:#FEF2F2;color:#DC2626;" />
+          </div>
+          <div class="form-row">
+            <label>No. of Packages / Pouches</label>
+            <input type="number" id="n-pkg-count" placeholder="e.g. 1800" min="0" />
+          </div>
         </div>
-        <div style="display:flex;gap:12px;">
-          <div class="form-row" style="flex:1">
+        <div style="margin-top:10px;padding:10px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;font-size:12px;color:#374151;">
+          <span style="font-weight:700;">Balance Bulk Stock:</span>
+          <span id="n-balance-bulk-display" style="font-weight:900;color:var(--brand-primary);font-size:14px;margin-left:8px;">&#x2014;</span>
+          <span style="color:#9CA3AF;font-size:11px;margin-left:4px;">(Bulk Used &#x2212; Packed Qty)</span>
+        </div>
+
+      </div><!-- end bpanel-3 -->
+
+      <!-- STEP 4: CUSTOMER DISPATCH -->
+      <div class="modal-step-panel hidden" id="bpanel-4">
+        <div style="margin-bottom:10px;padding:10px 12px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;font-size:12px;color:#92400E;">
+          <strong>&#x1F69A; Customer Dispatch Details</strong> (leave blank if batch is not dispatched yet)
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="form-row">
+            <label>Customer Name</label>
+            <input type="text" id="n-customer-name" placeholder="e.g. XYZ Traders" />
+          </div>
+          <div class="form-row">
+            <label>Customer Address</label>
+            <input type="text" id="n-customer-address" placeholder="e.g. Delhi" />
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
+          <div class="form-row">
             <label>Dispatch Date</label>
             <input type="date" id="n-dispatch-date" />
           </div>
-          <div class="form-row" style="flex:1">
+          <div class="form-row">
             <label>Dispatch Qty (kg)</label>
             <input type="number" id="n-dispatch-qty" placeholder="0" min="0" step="any" oninput="updateBalancePreview()" />
           </div>
-          <div class="form-row" style="flex:1.2">
-            <label>Invoice / Dispatch Ref No.</label>
-            <input type="text" id="n-dispatch-ref" placeholder="e.g. DIS/2026/001" />
+          <div class="form-row">
+            <label>Sales Invoice / Dispatch Ref</label>
+            <input type="text" id="n-dispatch-ref" placeholder="e.g. BI-4589" />
           </div>
         </div>
+
+        <div class="form-row" style="margin-top:10px;">
+          <label>Transport / Delivery Details</label>
+          <input type="text" id="n-transport-details" placeholder="e.g. Transporter Name / LR No. / Vehicle No." />
+        </div>
+
         <div style="margin-top:14px;padding:12px 14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:12px;color:var(--text-secondary);">Inward / Finished Qty</span>
-            <span style="font-size:13px;font-weight:600;" id="prev-purchase-qty">—</span>
+            <span style="font-size:12px;color:var(--text-secondary);">Inward / Net Qty</span>
+            <span style="font-size:13px;font-weight:600;" id="prev-purchase-qty">&#x2014;</span>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
             <span style="font-size:12px;color:var(--text-secondary);">Dispatch Qty</span>
-            <span style="font-size:13px;font-weight:600;color:#D97706;" id="prev-dispatch-qty">—</span>
+            <span style="font-size:13px;font-weight:600;color:#D97706;" id="prev-dispatch-qty">&#x2014;</span>
           </div>
           <div style="border-top:1px solid #E2E8F0;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:13px;font-weight:700;">Balance Stock (In Hand)</span>
-            <span style="font-size:16px;font-weight:800;color:var(--brand-primary);" id="prev-balance">—</span>
+            <span style="font-size:16px;font-weight:800;color:var(--brand-primary);" id="prev-balance">&#x2014;</span>
           </div>
         </div>
-      </div>
+      </div><!-- end bpanel-4 -->
 
     </div><!-- end modal-body -->
 
     <div class="modal-footer" style="justify-content:space-between;">
-      <button class="btn-ghost" id="batch-back-btn" onclick="batchStepNav(-1)" style="display:none;">← Back</button>
+      <button class="btn-ghost" id="batch-back-btn" onclick="batchStepNav(-1)" style="display:none;">&#x2190; Back</button>
       <div style="display:flex;gap:10px;margin-left:auto;">
         <button class="btn-ghost" onclick="closeModal()">Cancel</button>
-        <button class="btn-primary" id="batch-next-btn" onclick="batchStepNav(1)">Next →</button>
-        <button class="btn-primary hidden" id="save-batch-btn" onclick="saveNewBatch()">Save Batch</button>
+        <button class="btn-primary" id="batch-next-btn" onclick="batchStepNav(1)">Next &#x2192;</button>
+        <button class="btn-primary hidden" id="save-batch-btn" onclick="saveNewBatch()">Save Batch &#x2713;</button>
       </div>
     </div>
   </div>

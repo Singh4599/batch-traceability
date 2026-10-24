@@ -73,12 +73,19 @@ const MIX_KEYWORDS = [
 ];
 
 const LOCAL_KEY = 'lv_spices_batch_traceability';
-const STEP_TITLES = ['Purchase Details', 'Processing & Batch No.', 'Packing Quantity (Label Maker)', 'Dispatch & Balance'];
+const STEP_TITLES = [
+  '📋 Purchase & Quality Check',
+  '⚙️ Processing',
+  '🗄️ Storage Allocation',
+  '📦 Packing / Label Maker',
+  '🚚 Dispatch'
+];
 const STEP_SUBS = [
-  'Step 1 of 4 — Scan invoice or enter supplier details',
-  'Step 2 of 4 — Processing check & final batch number',
-  'Step 3 of 4 — Finished packaging records from Label Maker DB',
-  'Step 4 of 4 — Dispatch details & balance stock calculation'
+  'Step 1 of 5 — Supplier details, receiving QC & internal RM batch',
+  'Step 2 of 5 — Processing type, factory, ingredients, output & shortage',
+  'Step 3 of 5 — Allocate stock to cold / dry / shop storage',
+  'Step 4 of 5 — Packing records from Label Maker',
+  'Step 5 of 5 — Customer dispatch & balance stock'
 ];
 
 // ── UTILITY FUNCTIONS ────────────────────────────────────────────────────────
@@ -165,7 +172,7 @@ let labelPrintRecords = []; // Live Dukan Bai sticker records from lablerecords-
 let currentOcrItems = [];
 let _ocrSavedCount = 0; // tracks how many OCR items already saved in current scan session
 let _bStep = 0;
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -320,33 +327,33 @@ window.openBatch = function(id) {
   const purchaseQty  = Number(b.purchaseQty)  || 0;
   const ingArr       = Array.isArray(b.ingredients) ? b.ingredients : [];
   const ingTotalWt   = ingArr.reduce((s, i) => s + (Number(i.weight) || 0), 0);
-  const totalInputWt = purchaseQty + ingTotalWt;
+  const totalInputWt = Number(b.totalInputQty) || (purchaseQty + ingTotalWt);
   const netWt        = Number(b.netWeight) || purchaseQty;
-  const finishedQty  = Number(b.totalFinishedQty) || 0;  // 0 = not packed yet (no Label Maker data)
+  const finishedQty  = Number(b.totalFinishedQty) || 0;
   const bal          = Number(b.balanceStock) || 0;
   const procType     = b.processingType || '';
-  const shortage     = Number(b.blendShortage) || 0;
+  const shortage     = Number(b.shortageQty) || Number(b.blendShortage) || 0;
   const packageCount = b.pkgCount || b.packageCount || null;
-  const dispatchQty  = b.dispatchQty && b.dispatchQty !== '—' ? Number(b.dispatchQty) : 0;
-  const dispatchDate = b.dispatchDate && b.dispatchDate !== '—' ? b.dispatchDate : null;
+  const dispatchQty  = b.dispatchQty && b.dispatchQty !== '\u2014' ? Number(b.dispatchQty) : 0;
+  const dispatchDate = b.dispatchDate && b.dispatchDate !== '\u2014' ? b.dispatchDate : null;
 
-  // ── helpers ──
+  // \u2500\u2500 helpers \u2500\u2500
   const row = (icon, label, val, valStyle='') => `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
       <span style="font-size:14px;width:20px;text-align:center;flex-shrink:0;margin-top:1px;">${icon}</span>
-      <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
+      <span style="width:165px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
       <span style="font-size:12.5px;color:#0F172A;font-weight:500;flex:1;line-height:1.5;${valStyle}">${val}</span>
     </div>`;
 
   const chipRow = (icon, label, content) => `
     <div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
       <span style="font-size:14px;width:20px;text-align:center;flex-shrink:0;margin-top:1px;">${icon}</span>
-      <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
+      <span style="width:165px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;line-height:1.5;padding-top:1px;">${label}</span>
       <div style="flex:1;display:flex;flex-wrap:wrap;gap:4px;">${content}</div>
     </div>`;
 
   const section = (color, emoji, title, body) => `
-    <div style="margin-bottom:16px;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+    <div style="margin-bottom:14px;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
       <div style="background:${color};padding:10px 18px;display:flex;align-items:center;gap:9px;">
         <span style="font-size:17px;">${emoji}</span>
         <span style="font-size:12.5px;font-weight:800;color:#0F172A;letter-spacing:.2px;">${title}</span>
@@ -359,6 +366,7 @@ window.openBatch = function(id) {
   const chip = (text, bg, color, border) =>
     `<span style="background:${bg};color:${color};border:1.5px solid ${border};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">${text}</span>`;
 
+  // Ingredient chips
   const ingChipHtml = ingArr.length
     ? ingArr.map(i =>
         `<div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:6px;">
@@ -367,39 +375,95 @@ window.openBatch = function(id) {
           <strong style="font-size:12px;color:#374151;">${i.weight} kg</strong>
          </div>`
       ).join('')
-    : (b.otherIngredients && b.otherIngredients !== '—'
+    : (b.otherIngredients && b.otherIngredients !== '\u2014'
         ? `<span style="font-size:12px;color:#374151;">${b.otherIngredients}</span>`
         : `<span style="font-size:11px;color:#9CA3AF;">None added</span>`);
 
+  // Storage chips
   const storageChipHtml = (() => {
     if (Array.isArray(b.storageAllocation) && b.storageAllocation.length) {
       return b.storageAllocation.map(a =>
         `<div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;gap:6px;">
            <strong style="font-size:12px;color:#059669;">${a.qty || '?'} kg</strong>
-           <span style="font-size:11px;color:#374151;">— ${a.location}</span>
+           <span style="font-size:11px;color:#374151;">\u2014 ${a.location}</span>
          </div>`
       ).join('');
     }
-    return `<span style="font-size:12px;color:#374151;">${b.storageLocation || '—'}</span>`;
+    return `<span style="font-size:12px;color:#374151;">${b.storageLocation || '\u2014'}</span>`;
   })();
 
-  // processing
-  let procLabel = chip('⬜ None', '#F9FAFB', '#6B7280', '#E5E7EB');
+  // Processing chip label
+  let procLabel = chip('\u2b1c None', '#F9FAFB', '#6B7280', '#E5E7EB');
   if (b.processingDone === 'Yes') {
-    if (procType === 'factory')    procLabel = chip('🏭 Factory — Grinding', '#F5F3FF', '#6D28D9', '#DDD6FE');
-    else if (procType === 'blend') procLabel = chip('🌀 Blending',           '#ECFEFF', '#0891B2', '#A5F3FC');
-    else                           procLabel = chip('✅ ' + procType,         '#ECFDF5', '#059669', '#A7F3D0');
+    if (procType === 'factory')   procLabel = chip('\ud83c\udfed External Factory', '#F5F3FF', '#6D28D9', '#DDD6FE');
+    else if (procType === 'blend') procLabel = chip('\ud83c\udfe2 In-House Shop', '#ECFEFF', '#0891B2', '#A5F3FC');
+    else                           procLabel = chip('\u2705 ' + procType, '#ECFDF5', '#059669', '#A7F3D0');
   }
 
-  const shortageBlock = (b.processingDone === 'Yes' && procType === 'factory' && shortage > 0)
+  // QC Status chip
+  const qcChip = (() => {
+    const s = b.qcStatus || 'Approved';
+    if (s === 'Approved')    return chip('\u2705 Approved', '#F0FDF4', '#166534', '#86EFAC');
+    if (s === 'Conditional') return chip('\u26a0\ufe0f Conditional', '#FFFBEB', '#92400E', '#FCD34D');
+    return chip('\u274c Rejected', '#FEF2F2', '#DC2626', '#FECACA');
+  })();
+
+  // Quality Approval chip
+  const qaChip = (() => {
+    const s = b.qualityApproval || 'Approved';
+    if (s === 'Approved')    return chip('\u2705 Approved', '#F0FDF4', '#166534', '#86EFAC');
+    if (s === 'Conditional') return chip('\u26a0\ufe0f Conditional', '#FFFBEB', '#92400E', '#FCD34D');
+    return chip('\u274c Rejected', '#FEF2F2', '#DC2626', '#FECACA');
+  })();
+
+  // Shortage block
+  const shortageBlock = (b.processingDone === 'Yes' && shortage > 0)
     ? `<div style="margin:10px 0 4px;background:linear-gradient(135deg,#FFF1F2,#FEF2F2);border:2px solid #FECDD3;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px;">
-         <div style="font-size:28px;">⚠️</div>
+         <div style="font-size:28px;">\u26a0\ufe0f</div>
          <div>
-           <div style="font-size:10px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Shortage</div>
-           <div style="font-size:26px;font-weight:900;color:#DC2626;line-height:1;">−${shortage} kg</div>
-           <div style="font-size:11px;color:#9F1239;margin-top:2px;">${purchaseQty} kg in → ${netWt} kg net output</div>
+           <div style="font-size:10px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Processing Shortage</div>
+           <div style="font-size:26px;font-weight:900;color:#DC2626;line-height:1;">\u2212${shortage} kg</div>
+           <div style="font-size:11px;color:#9F1239;margin-top:2px;">${totalInputWt} kg in \u2192 ${netWt} kg net output &nbsp;&bull;&nbsp; Reason: ${b.shortageReason || '\u2014'}</div>
          </div>
        </div>` : '';
+
+  // Packing progress block
+  const packedQty  = finishedQty;
+  const pkgDone    = packedQty > 0 || Number(packageCount) > 0;
+  const packPct    = netWt > 0 && pkgDone ? Math.min(100, Math.round((packedQty / netWt) * 100)) : 0;
+
+  const repackProgress = pkgDone
+    ? `<div style="margin:8px 0 12px;background:#F0F4FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:12px 14px;">
+           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+             <span style="font-size:11px;font-weight:700;color:#3730A3;text-transform:uppercase;letter-spacing:.4px;">\ud83d\udce6 Repacking Status</span>
+             <span style="font-size:11px;color:#6366F1;font-weight:800;">${packPct}% Packed</span>
+           </div>
+           <div style="background:#C7D2FE;border-radius:20px;height:7px;overflow:hidden;margin-bottom:10px;">
+             <div style="background:linear-gradient(90deg,#4F46E5,#818CF8);height:100%;width:${packPct}%;border-radius:20px;"></div>
+           </div>
+           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+             <div style="background:#fff;border-radius:8px;padding:8px 4px;border:1px solid #DDE3FF;">
+               <div style="font-size:9px;color:#6B7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Net Output</div>
+               <div style="font-size:16px;font-weight:900;color:#0F172A;">${netWt} kg</div>
+             </div>
+             <div style="background:#F0FDF4;border-radius:8px;padding:8px 4px;border:1px solid #86EFAC;">
+               <div style="font-size:9px;color:#15803D;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Packed \u2713</div>
+               <div style="font-size:16px;font-weight:900;color:#059669;">${packedQty} kg</div>
+             </div>
+             <div style="background:${Number(b.balanceBulkStock) > 0 ? '#FEFCE8' : '#F9FAFB'};border-radius:8px;padding:8px 4px;border:1px solid ${Number(b.balanceBulkStock) > 0 ? '#FDE047' : '#E5E7EB'};">
+               <div style="font-size:9px;color:${Number(b.balanceBulkStock) > 0 ? '#854D0E' : '#059669'};font-weight:700;text-transform:uppercase;margin-bottom:3px;">Bulk Left</div>
+               <div style="font-size:16px;font-weight:900;color:${Number(b.balanceBulkStock) > 0 ? '#CA8A04' : '#059669'};">${Number(b.balanceBulkStock) || 0} kg</div>
+             </div>
+           </div>
+           ${packageCount ? `<div style="text-align:center;margin-top:8px;font-size:11px;color:#4338CA;font-weight:700;">\ud83c\udff7\ufe0f ${packageCount} packages &nbsp;&bull;&nbsp; Expiry: ${b.expiryDate || '\u2014'}</div>` : ''}
+         </div>`
+    : `<div style="margin:8px 0 12px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
+           <span style="font-size:22px;">\u23f3</span>
+           <div>
+             <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.4px;">Repacking Not Started</div>
+             <div style="font-size:12px;color:#78350F;margin-top:2px;">No packages recorded yet \u2014 use Label Maker to update.</div>
+           </div>
+         </div>`;
 
   document.getElementById('batch-modal-body').innerHTML = `
     <div style="font-family:'Inter',system-ui,sans-serif;">
@@ -409,90 +473,94 @@ window.openBatch = function(id) {
         <div style="flex:1;min-width:0;">
           <div style="font-size:22px;font-weight:900;color:#0F172A;line-height:1.2;margin-bottom:6px;">${b.productName}</div>
           <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;">
-            <span style="background:#EDE9FE;color:#6D28D9;font-size:11px;font-weight:700;padding:3px 11px;border-radius:7px;">${b.finalBatchNo || '—'}</span>
+            <span style="background:#EDE9FE;color:#6D28D9;font-size:11px;font-weight:700;padding:3px 11px;border-radius:7px;">${b.finalBatchNo || '\u2014'}</span>
+            ${b.packingBatchNo && b.packingBatchNo !== '\u2014' ? `<span style="background:#DCFCE7;color:#166534;font-size:11px;font-weight:700;padding:3px 11px;border-radius:7px;">\ud83d\udce6 ${b.packingBatchNo}</span>` : ''}
             <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
             <span style="font-size:10px;color:#94A3B8;font-family:monospace;">ID: ${b.id}</span>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;">
-          <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:7px 12px;font-size:11px;">✏️ Edit</button>
+          <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:7px 12px;font-size:11px;">\u270f\ufe0f Edit</button>
           <button onclick="deleteBatch('${b.id}')" style="padding:7px 12px;font-size:11px;background:#FEF2F2;color:#DC2626;border:1.5px solid #FECACA;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:5px;"><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='12' height='12'><polyline points='3 6 5 6 21 6'/><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'/><path d='M10 11v6'/><path d='M14 11v6'/><path d='M9 6V4h6v2'/></svg>Delete</button>
         </div>
       </div>
 
-      <!-- Step 1: PROCUREMENT -->
-      ${section('#EFF6FF', '📋', 'STEP 1 — Procurement & Supplier',
-          row('🏢', 'Supplier Name',    `<strong style="font-size:13px;">${b.supplierName || '—'}</strong>`)
-        + row('🔢', 'Supplier GSTIN',   b.supplierGSTIN || '—')
-        + row('🍽️', 'Supplier FSSAI',   b.supplierFSSAI || '—')
-        + row('📍', 'Supplier Address', b.supplierAddress || '—')
-        + row('🏷️', 'Supplier Lot/Batch', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;">${b.supplierBatch || 'NIL'}</code>`)
-        + row('📄', 'Invoice No.',      `<strong style="color:#1D4ED8;">${b.invoiceNo || '—'}</strong>`)
-        + row('📅', 'Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
-        + row('⚖️', 'Raw Purchase Qty', `<strong style="font-size:15px;">${purchaseQty} kg</strong>`, 'color:#0F172A;')
+      <!-- 1. SUPPLIER / RAW MATERIAL PURCHASE -->
+      ${section('#EFF6FF', '\ud83d\udccb', '1 \u2014 Supplier / Raw Material Purchase',
+          row('\ud83c\udfe2', 'Supplier Name',    `<strong style="font-size:13px;">${b.supplierName || '\u2014'}</strong>`)
+        + row('\ud83d\udd22', 'Supplier GSTIN',   b.supplierGSTIN || '\u2014')
+        + row('\ud83c\udf7d\ufe0f', 'Supplier FSSAI',   b.supplierFSSAI || '\u2014')
+        + row('\ud83d\udccd', 'Supplier Address', b.supplierAddress || '\u2014')
+        + row('\ud83c\udff7\ufe0f', 'Supplier Lot / Batch', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;">${b.supplierBatch || 'NIL'}</code>`)
+        + row('\ud83d\udcc4', 'Purchase Invoice', `<strong style="color:#1D4ED8;">${b.invoiceNo || '\u2014'}</strong>`)
+        + row('\ud83d\udcc5', 'Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
+        + row('\u2696\ufe0f', 'Qty Purchased',    `<strong style="font-size:15px;">${purchaseQty} kg</strong>`)
       )}
 
-      <!-- Step 2: PROCESSING -->
-      ${section('#FFFBEB', '⚙️', 'STEP 2 — Processing',
-          chipRow('🔧', 'Processing Type', procLabel)
-        + (b.processingDone === 'Yes' ? row('📑', 'Post-Proc. Challan', b.challanNo || '—') : '')
-        + chipRow('🌿', 'Extra Ingredients', ingChipHtml)
-        + (b.processingDone === 'Yes'
-            ? row('📥', 'Total Input Weight', `<strong>${totalInputWt} kg</strong> <span style="color:#9CA3AF;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
-            : '')
-        + shortageBlock
-        + row('📤', 'Net Weight (Output)', `<strong style="font-size:16px;color:${shortage > 0 ? '#DC2626' : '#059669'};">${netWt} kg</strong>`)
+      <!-- 2. RAW MATERIAL RECEIVING & QUALITY CHECK -->
+      ${section('#ECFDF5', '\u2705', '2 \u2014 Raw Material Receiving & Quality Check',
+          row('\ud83d\udcc5', 'Receiving Date',      b.receivingDate ? formatDate(new Date(b.receivingDate + 'T00:00:00')) : '\u2014')
+        + row('\ud83c\udd94', 'Internal RM Batch No.', `<code style="background:#DCFCE7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700;">${b.internalRMBatchNo || '\u2014'}</code>`)
+        + row('\ud83d\udce6', 'Qty Received',        `${b.qtyReceived || purchaseQty} kg`)
+        + row('\u2705', 'Qty Accepted',        `<strong style="color:#059669;">${b.qtyAccepted || purchaseQty} kg</strong>`)
+        + row('\u274c', 'Qty Rejected',        `<span style="color:${Number(b.qtyRejected) > 0 ? '#DC2626' : '#6B7280'};font-weight:${Number(b.qtyRejected) > 0 ? '700' : '400'};">${b.qtyRejected || 0} kg</span>`)
+        + chipRow('\ud83d\udd2c', 'QC Status',         qcChip)
+        + row('\ud83d\udcc5', 'Inward Storage',     b.inwardStorage || '\u2014')
       )}
 
-      <!-- Step 3: STORAGE & PACKAGING -->
-      ${(()=>{
-        const packedQty   = finishedQty;                               // from Label Maker only
-        const pkgDone     = packedQty > 0 || Number(packageCount) > 0; // has any packing happened?
-        const unpackedQty = Math.max(0, +(netWt - packedQty).toFixed(3));
-        const packPct     = netWt > 0 && pkgDone ? Math.min(100, Math.round((packedQty / netWt) * 100)) : 0;
+      <!-- 3. PROCESSING -->
+      ${section('#FFFBEB', '\u2699\ufe0f', '3 \u2014 Processing',
+          chipRow('\ud83d\udd27', 'Processing Type', procLabel)
+        + (b.processingDone === 'Yes' && b.factoryName && b.factoryName !== '\u2014'
+            ? row('\ud83c\udfed', 'Factory / Mill Name', `<strong>${b.factoryName}</strong>`) : '')
+        + (b.processingDone === 'Yes' && b.challanNo && b.challanNo !== '\u2014'
+            ? row('\ud83d\udcc4', 'Job Work Challan No.', b.challanNo) : '')
+        + (b.dispatchToFactory && b.dispatchToFactory !== '\u2014'
+            ? row('\ud83d\udcc5', 'Dispatch to Factory', b.dispatchToFactory) : '')
+        + (b.completionDate && b.completionDate !== '\u2014'
+            ? row('\ud83d\udcc5', 'Completion Date', b.completionDate) : '')
+        + (b.inhouseLocation && b.inhouseLocation !== '\u2014'
+            ? row('\ud83c\udfe2', 'Processing Location', b.inhouseLocation) : '')
+      )}
 
-        const repackProgress = pkgDone
-          ? `<div style="margin:8px 0 12px;background:#F0F4FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:12px 14px;">
-               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
-                 <span style="font-size:11px;font-weight:700;color:#3730A3;text-transform:uppercase;letter-spacing:.4px;">📦 Repacking Status</span>
-                 <span style="font-size:11px;color:#6366F1;font-weight:800;">${packPct}% Packed</span>
-               </div>
-               <div style="background:#C7D2FE;border-radius:20px;height:7px;overflow:hidden;margin-bottom:10px;">
-                 <div style="background:linear-gradient(90deg,#4F46E5,#818CF8);height:100%;width:${packPct}%;border-radius:20px;"></div>
-               </div>
-               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-                 <div style="background:#fff;border-radius:8px;padding:8px 4px;border:1px solid #DDE3FF;">
-                   <div style="font-size:9px;color:#6B7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Net Output</div>
-                   <div style="font-size:16px;font-weight:900;color:#0F172A;">${netWt} kg</div>
-                 </div>
-                 <div style="background:#F0FDF4;border-radius:8px;padding:8px 4px;border:1px solid #86EFAC;">
-                   <div style="font-size:9px;color:#15803D;font-weight:700;text-transform:uppercase;margin-bottom:3px;">Packed ✓</div>
-                   <div style="font-size:16px;font-weight:900;color:#059669;">${packedQty} kg</div>
-                 </div>
-                 <div style="background:${unpackedQty > 0 ? '#FEFCE8' : '#F9FAFB'};border-radius:8px;padding:8px 4px;border:1px solid ${unpackedQty > 0 ? '#FDE047' : '#E5E7EB'};">
-                   <div style="font-size:9px;color:${unpackedQty > 0 ? '#854D0E' : '#059669'};font-weight:700;text-transform:uppercase;margin-bottom:3px;">Remaining</div>
-                   <div style="font-size:16px;font-weight:900;color:${unpackedQty > 0 ? '#CA8A04' : '#059669'};">${unpackedQty} kg</div>
-                 </div>
-               </div>
-               ${packageCount ? `<div style="text-align:center;margin-top:8px;font-size:11px;color:#4338CA;font-weight:700;">🏷️ ${packageCount} packages made</div>` : ''}
-             </div>`
-          : `<div style="margin:8px 0 12px;background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
-               <span style="font-size:22px;">⏳</span>
-               <div>
-                 <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.4px;">Repacking Not Started</div>
-                 <div style="font-size:12px;color:#78350F;margin-top:2px;">No packages recorded yet — use Label Maker to update.</div>
-               </div>
-             </div>`;
+      <!-- 4. INGREDIENT-WISE BATCH & QUANTITY -->
+      ${b.processingDone === 'Yes' ? section('#F5F3FF', '\ud83c\udf31', '4 \u2014 Ingredient-wise Batch & Quantity',
+          chipRow('\ud83c\udf31', 'Ingredients Used', ingChipHtml)
+        + row('\ud83d\udce5', 'Total Input Qty', `<strong style="font-size:14px;">${totalInputWt} kg</strong> <span style="color:#9CA3AF;font-size:10px;">(${purchaseQty} kg raw + ${ingTotalWt} kg ingredients)</span>`)
+      ) : ''}
 
-        return section('#ECFDF5', '📦', 'STEP 3 — Storage & Packaging',
-            repackProgress
-          + chipRow('🗄️', 'Storage Breakdown', storageChipHtml)
-          + row('📅', 'Repacking Date', b.repackingDate || '—')
-        );
-      })()}
+      <!-- 5/6. PROCESSING OUTPUT & SHORTAGE -->
+      ${b.processingDone === 'Yes' ? section('#FFF1F2', '\u26a0\ufe0f', '5 \u2014 Processing Output & Shortage',
+          shortageBlock
+        + row('\ud83d\udce4', 'Net Output (kg)', `<strong style="font-size:16px;color:${shortage > 0 ? '#DC2626' : '#059669'};">${netWt} kg</strong>`)
+        + (b.shortageReason && b.shortageReason !== '\u2014' ? row('\ud83d\udcac', 'Reason for Shortage', b.shortageReason) : '')
+        + chipRow('\ud83d\udd2c', 'Quality Approval', qaChip)
+        + row('\ud83d\udcc5', 'Repacking Date', b.repackingDate || '\u2014')
+        + row('\ud83c\udd94', 'Final Batch No.', `<strong style="color:#6D28D9;">${b.finalBatchNo || '\u2014'}</strong>`)
+      ) : ''}
 
-      <!-- Step 4: DISPATCH & COMPLIANCE -->
-      ${section(isRecallOpen ? '#FEF2F2' : '#F5F3FF', isRecallOpen ? '🚨' : '🚚', 'STEP 4 — Dispatch & Compliance',
+      <!-- 7. STORAGE ALLOCATION -->
+      ${section('#F0F9FF', '\ud83d\uddc4\ufe0f', '7 \u2014 Storage Allocation',
+          row('\u2696\ufe0f', 'Total Available Qty', `<strong>${netWt} kg</strong>`)
+        + chipRow('\ud83d\udce6', 'Storage Breakdown', storageChipHtml)
+        + (b.transferDate && b.transferDate !== '\u2014' ? row('\ud83d\udcc5', 'Transfer Date', b.transferDate) : '')
+        + (b.stockMoveRef && b.stockMoveRef !== '\u2014' ? row('\ud83d\udd22', 'Stock Movement Ref', `<code style="background:#E0F2FE;color:#0369A1;padding:2px 8px;border-radius:5px;">${b.stockMoveRef}</code>`) : '')
+      )}
+
+      <!-- 8. PACKING / REPACKING -->
+      ${section('#ECFDF5', '\ud83d\udce6', '8 \u2014 Packing / Repacking',
+          repackProgress
+        + (b.packingBatchNo && b.packingBatchNo !== '\u2014' ? row('\ud83c\udd94', 'Packing Batch No.', `<code style="background:#DCFCE7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700;">${b.packingBatchNo}</code>`) : '')
+        + (b.packingDate && b.packingDate !== '\u2014' ? row('\ud83d\udcc5', 'Packing Date', b.packingDate) : '')
+        + (b.bulkQtyUsed && b.bulkQtyUsed !== '\u2014' ? row('\u2696\ufe0f', 'Bulk Qty Used', `${b.bulkQtyUsed} kg`) : '')
+        + (finishedQty > 0 ? row('\u2705', 'Total Packed Qty', `<strong style="color:#059669;">${finishedQty} kg</strong>`) : '')
+        + (b.packingLoss > 0 ? row('\ud83d\udd12', 'Packing Loss / Wastage', `<span style="color:#DC2626;">${b.packingLoss} kg</span>`) : '')
+        + (packageCount ? row('\ud83c\udff7\ufe0f', 'No. of Packages', `<strong>${packageCount} pouches</strong>`) : '')
+        + (b.expiryDate && b.expiryDate !== '\u2014' ? row('\ud83d\udcc5', 'Expiry / Best Before', `<strong style="color:#D97706;">${b.expiryDate}</strong>`) : '')
+      )}
+
+      <!-- 9. FINISHED GOODS STOCK (balance panel) -->
+      ${section('#F5F3FF', '\ud83d\udcca', '9 \u2014 Finished Goods Stock',
           `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0 14px;">
              <div style="background:${bal > 0 ? '#F0FDF4' : bal < 0 ? '#FEF2F2' : '#F9FAFB'};border-radius:12px;padding:14px 16px;text-align:center;border:1.5px solid ${bal > 0 ? '#BBF7D0' : bal < 0 ? '#FECACA' : '#E5E7EB'};">
                <div style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">Balance Stock</div>
@@ -503,18 +571,31 @@ window.openBatch = function(id) {
                <div style="font-size:28px;font-weight:900;color:${dispatchQty > 0 ? '#0369A1' : '#9CA3AF'};line-height:1;">${dispatchQty} kg</div>
              </div>
            </div>`
-        + row('📅', 'Dispatch Date',        dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#9CA3AF;">Not dispatched yet</span>')
-        + row('🧾', 'Invoice / Dispatch Ref', b.invoiceRef || '—')
+        + row('\ud83d\udcca', 'Dispatch Status',
+            dispatchQty > 0 ? chip('\u2714 Dispatched', '#F0FDF4', '#059669', '#86EFAC') :
+            finishedQty > 0 ? chip('\u23f3 Pending Dispatch', '#FFFBEB', '#92400E', '#FCD34D') :
+                              chip('\u2022 In Stock', '#F0F9FF', '#0369A1', '#BAE6FD'))
+      )}
+
+      <!-- 10. CUSTOMER DISPATCH -->
+      ${section(isRecallOpen ? '#FEF2F2' : '#FFF7ED', isRecallOpen ? '\ud83d\udea8' : '\ud83d\ude9a', '10 \u2014 Customer Dispatch',
+          row('\ud83d\udcc5', 'Dispatch Date',       dispatchDate ? `<strong>${dispatchDate}</strong>` : '<span style="color:#9CA3AF;">Not dispatched yet</span>')
+        + (b.customerName && b.customerName !== '\u2014' ? row('\ud83e\udd1d', 'Customer Name', `<strong>${b.customerName}</strong>`) : '')
+        + (b.customerAddress && b.customerAddress !== '\u2014' ? row('\ud83d\udccd', 'Customer Address', b.customerAddress) : '')
+        + row('\ud83e\uddf3', 'Dispatch Qty',       dispatchQty > 0 ? `<strong>${dispatchQty} kg</strong>` : '<span style="color:#9CA3AF;">\u2014</span>')
+        + row('\ud83e\uddf3', 'Sales Invoice / Ref', b.invoiceRef || '\u2014')
+        + (b.transportDetails && b.transportDetails !== '\u2014' ? row('\ud83d\ude9b', 'Transport / LR No.', b.transportDetails) : '')
         + `<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #F1F5F9;">
-             <span style="font-size:14px;width:20px;text-align:center;">🔔</span>
-             <span style="width:155px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;">Recall Status</span>
+             <span style="font-size:14px;width:20px;text-align:center;">\ud83d\udd14</span>
+             <span style="width:165px;flex-shrink:0;font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.35px;">Recall Status</span>
              <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
            </div>`
-        + row('💬', 'Complaint / Notes',    b.complaint && b.complaint !== 'None'
+        + row('\ud83d\udcac', 'Complaint / Notes',
+            b.complaint && b.complaint !== 'None'
               ? `<span style="color:#DC2626;font-weight:600;">${b.complaint}</span>`
               : '<span style="color:#9CA3AF;">None</span>')
-        + row('✅', 'Action Taken',         b.actionTaken || '—')
-        + row('👤', 'Verified By',          `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
+        + row('\u2705', 'Action Taken',   b.actionTaken || '\u2014')
+        + row('\ud83d\udc64', 'Verified By',      `<strong>${b.verifiedBy || 'Bhimlal Sharma'}</strong>`)
       )}
 
     </div>`;
@@ -563,30 +644,63 @@ window.onSearchChange = function(val) {
   renderTable();
 };
 
-// ── 4-STEP WIZARD MODAL LOGIC ────────────────────────────────────────────────
+// ── 5-STEP WIZARD MODAL LOGIC ──────────────────────────────────────────────────
 window.openNewModal = function() {
   _bStep = 0;
   const today = new Date().toISOString().split('T')[0];
-  document.getElementById('n-purchase-date').value = today;
-  document.getElementById('n-repack-date').value = today;
 
-  ['n-product', 'n-invoice', 'n-supplier', 'n-supplier-batch', 'n-ingredients', 'n-final-batch', 'n-dispatch-ref'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  ['n-qty', 'n-total-finished', 'n-pkg-count', 'n-dispatch-qty'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
+  // Clear all text/number fields
+  [
+    'n-product','n-invoice','n-supplier','n-supplier-batch','n-supplier-gstin',
+    'n-supplier-fssai','n-supplier-address','n-rm-batch-no',
+    'n-final-batch','n-process-challan','n-factory-name','n-inhouse-location',
+    'n-shortage-reason','n-stock-ref',
+    'n-packing-batch-no','n-customer-name','n-customer-address','n-transport-details',
+    'n-dispatch-ref','n-direct-rm-batch'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
+  [
+    'n-qty','n-qty-received','n-qty-accepted','n-qty-rejected',
+    'n-net-weight','n-total-input','n-total-output','n-shortage-qty',
+    'n-total-available','n-direct-qty',
+    'n-total-finished','n-pkg-count','n-bulk-qty-used','n-packing-loss',
+    'n-dispatch-qty'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // Set date defaults
+  ['n-purchase-date','n-receiving-date','n-transfer-date'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = today;
+  });
+  ['n-dispatch-to-factory','n-completion-date','n-completion-date-inhouse',
+   'n-repack-date','n-repack-date-direct','n-packing-date','n-expiry-date','n-dispatch-date'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // Reset selects / toggles
   document.getElementById('n-processing').value = 'No';
   const hintEl = document.getElementById('processing-auto-hint');
   if (hintEl) hintEl.style.display = 'none';
+  document.querySelectorAll('input[name="proc-type"]').forEach(r => r.checked = false);
 
+  // Reset balance bulk display
+  const bbd = document.getElementById('n-balance-bulk-display');
+  if (bbd) bbd.textContent = '—';
+
+  // OCR strip reset
   document.getElementById('ocr-scan-label').textContent = '📷 Scan Purchase Invoice with AI (tap to upload)';
   document.getElementById('ocr-thumb-row').style.display = 'none';
   const chipsWrap = document.getElementById('ocr-items-picker');
   if (chipsWrap) chipsWrap.classList.add('hidden');
+
+  // Reset ingredient rows
+  const ingRows = document.getElementById('ingredient-rows');
+  if (ingRows) ingRows.innerHTML = \'<div class="ingredient-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center;"><input type="text" placeholder="e.g. Red Chilli" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-name" /><input type="text" placeholder="NIL if none" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-batch" /><input type="number" placeholder="0" style="padding:7px 10px;border:1px solid #E2E8F0;border-radius:7px;font-size:12px;" class="ing-weight" min="0" step="any" oninput="recalcNetWeight()" /><button type="button" onclick="removeIngredientRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">&#x2715;</button></div>\';
+
+  // Reset storage checks
+  ['dry','cold','shop'].forEach(k => {
+    const cb = document.getElementById('store-' + k); if (cb) cb.checked = false;
+    const qty = document.getElementById('store-' + k + '-qty'); if (qty) { qty.value = ''; qty.disabled = true; }
+    const rm  = document.getElementById('store-' + k + '-room'); if (rm) rm.disabled = true;
+  });
 
   _updateBatchStepUI();
   document.getElementById('modal-overlay').style.display = 'flex';
@@ -610,14 +724,13 @@ function _updateBatchStepUI() {
   document.getElementById('batch-next-btn').classList.toggle('hidden', _bStep === TOTAL_STEPS - 1);
   document.getElementById('save-batch-btn').classList.toggle('hidden', _bStep !== TOTAL_STEPS - 1);
 
-  // STEP 1 ACTIONS: Auto-generate batch number & check mix masala
+  // STEP 1: Auto-generate batch no, mix detect, processing state
   if (_bStep === 1) {
     const product = document.getElementById('n-product').value.trim();
-    const date = document.getElementById('n-purchase-date').value;
+    const date    = document.getElementById('n-purchase-date').value;
     if (product) {
-      if (!document.getElementById('n-final-batch').value) {
+      if (!document.getElementById('n-final-batch').value)
         document.getElementById('n-final-batch').value = genFinalBatchNo(product, date);
-      }
       if (isMixProduct(product)) {
         document.getElementById('n-processing').value = 'Yes';
         const hintEl = document.getElementById('processing-auto-hint');
@@ -625,15 +738,33 @@ function _updateBatchStepUI() {
       }
     }
     onProcessingChange(document.getElementById('n-processing').value);
+    // Auto-fill direct rm batch from step-0 value
+    const rmBatch = document.getElementById('n-rm-batch-no')?.value;
+    const directRM = document.getElementById('n-direct-rm-batch');
+    if (directRM && rmBatch) directRM.value = rmBatch;
   }
 
-  // STEP 2 ACTIONS: Query Label Maker DB for product packaging stats
+  // STEP 2: Fill total-available from net weight
   if (_bStep === 2) {
-    populateLabelStatsAndList();
+    const netWt = Number(document.getElementById('n-net-weight')?.value)
+      || Number(document.getElementById('n-qty')?.value) || 0;
+    const avail = document.getElementById('n-total-available');
+    if (avail && netWt > 0) avail.value = netWt;
+    onStorageQtyChange();
   }
 
-  // STEP 3 ACTIONS: Real-time balance preview
+  // STEP 3: Query Label Maker DB
   if (_bStep === 3) {
+    populateLabelStatsAndList();
+    // Auto-fill packing date
+    const pkDate = document.getElementById('n-packing-date');
+    if (pkDate && !pkDate.value) {
+      pkDate.value = new Date().toISOString().split('T')[0];
+    }
+  }
+
+  // STEP 4: Balance preview
+  if (_bStep === 4) {
     updateBalancePreview();
   }
 }
@@ -682,14 +813,20 @@ window.onProductInput = function(val) {
 };
 
 window.onProcessingChange = function(val) {
-  const typeRow = document.getElementById('processing-type-row');
-  if (typeRow) typeRow.style.display = val === 'Yes' ? '' : 'none';
+  const typeRow      = document.getElementById('processing-type-row');
+  const directInfo   = document.getElementById('direct-repacking-info');
+  if (typeRow)    typeRow.style.display    = val === 'Yes' ? '' : 'none';
+  if (directInfo) directInfo.style.display = val === 'No'  ? '' : 'none';
   if (val !== 'Yes') {
     document.querySelectorAll('input[name="proc-type"]').forEach(r => r.checked = false);
-    const sec = document.getElementById('ingredients-section');
-    const pc  = document.getElementById('post-challan-row');
-    if (sec) sec.style.display = 'none';
-    if (pc)  pc.style.display  = 'none';
+    const sec  = document.getElementById('ingredients-section');
+    const pos  = document.getElementById('processing-output-section');
+    const fex  = document.getElementById('factory-extra-fields');
+    const iex  = document.getElementById('inhouse-extra-fields');
+    if (sec)  sec.style.display  = 'none';
+    if (pos)  pos.style.display  = 'none';
+    if (fex)  fex.style.display  = 'none';
+    if (iex)  iex.style.display  = 'none';
     const lf = document.getElementById('lbl-factory');
     const lb = document.getElementById('lbl-blend');
     if (lf) { lf.style.borderColor = '#E2E8F0'; lf.style.background = ''; }
@@ -701,19 +838,27 @@ window.onProcTypeChange = function(type) {
   const sec  = document.getElementById('ingredients-section');
   const fBar = document.getElementById('factory-info-bar');
   const bBar = document.getElementById('blend-info-bar');
-  const pc   = document.getElementById('post-challan-row');
+  const fex  = document.getElementById('factory-extra-fields');
+  const iex  = document.getElementById('inhouse-extra-fields');
+  const pos  = document.getElementById('processing-output-section');
   const lf   = document.getElementById('lbl-factory');
   const lb   = document.getElementById('lbl-blend');
+
   if (sec) sec.style.display = '';
-  if (pc)  pc.style.display  = '';
+  if (pos) pos.style.display = '';
+
   if (type === 'factory') {
     if (fBar) fBar.style.display = '';
     if (bBar) bBar.style.display = 'none';
+    if (fex)  fex.style.display  = '';
+    if (iex)  iex.style.display  = 'none';
     lf.style.borderColor = 'var(--brand-primary)'; lf.style.background = '#EEF2FF';
     lb.style.borderColor = '#E2E8F0';               lb.style.background = '';
   } else {
     if (fBar) fBar.style.display = 'none';
     if (bBar) bBar.style.display = '';
+    if (fex)  fex.style.display  = 'none';
+    if (iex)  iex.style.display  = '';
     lb.style.borderColor = '#16A34A'; lb.style.background = '#F0FDF4';
     lf.style.borderColor = '#E2E8F0'; lf.style.background = '';
   }
@@ -789,7 +934,60 @@ window.removeIngredientRow = function(btn) {
   recalcNetWeight();
 };
 
-window.onNetWeightChange = function() { onStorageQtyChange(); };
+window.onNetWeightChange = function() {
+  onStorageQtyChange();
+  // Sync output field too
+  const nw = document.getElementById('n-net-weight')?.value;
+  const outEl = document.getElementById('n-total-output');
+  if (outEl && nw) outEl.value = nw;
+  onOutputQtyChange();
+};
+
+// QC auto-calculate: rejected = received - accepted
+window.onQCQtyChange = function() {
+  const received = Number(document.getElementById('n-qty-received')?.value) || 0;
+  const accepted = Number(document.getElementById('n-qty-accepted')?.value) || 0;
+  const rejEl = document.getElementById('n-qty-rejected');
+  if (rejEl) rejEl.value = Math.max(0, received - accepted);
+  // Auto-fill purchase qty if not set
+  const qtyEl = document.getElementById('n-qty');
+  if (qtyEl && !qtyEl.value && received > 0) qtyEl.value = received;
+  // Auto-generate RM batch no if blank
+  const rmEl = document.getElementById('n-rm-batch-no');
+  const prod  = document.getElementById('n-product')?.value.trim();
+  if (rmEl && !rmEl.value && prod) {
+    const abbr = prod.replace(/\s+/g, '-').substring(0, 8).toUpperCase();
+    const dt   = document.getElementById('n-purchase-date')?.value || '';
+    const mm   = dt.slice(5,7); const yy = dt.slice(2,4);
+    rmEl.value = `RM-${abbr}-${mm}${yy}`;
+  }
+};
+
+// Bulk packing: packing loss = bulk used - packed qty
+window.onBulkQtyChange = function() {
+  const bulk   = Number(document.getElementById('n-bulk-qty-used')?.value) || 0;
+  const packed = Number(document.getElementById('n-total-finished')?.value) || 0;
+  const lossEl = document.getElementById('n-packing-loss');
+  const bbdEl  = document.getElementById('n-balance-bulk-display');
+  if (bulk > 0 && packed > 0) {
+    const loss = +(bulk - packed).toFixed(3);
+    if (lossEl) lossEl.value = Math.max(0, loss);
+    if (bbdEl)  bbdEl.textContent = Math.max(0, loss) + ' kg';
+  } else {
+    if (lossEl) lossEl.value = '';
+    if (bbdEl)  bbdEl.textContent = '\u2014';
+  }
+};
+
+// Processing output: sync shortage qty when output entered manually
+window.onOutputQtyChange = function() {
+  const input  = Number(document.getElementById('n-total-input')?.value) || 0;
+  const output = Number(document.getElementById('n-total-output')?.value) || 0;
+  const shEl   = document.getElementById('n-shortage-qty');
+  const nwEl   = document.getElementById('n-net-weight');
+  if (shEl && input > 0) shEl.value = Math.max(0, +(input - output).toFixed(3));
+  if (nwEl && output > 0) nwEl.value = output;
+};
 
 window.onStorageCheck = function() {
   ['dry','cold','shop'].forEach(key => {
@@ -1121,45 +1319,85 @@ window.updateBalancePreview = function() {
 };
 
 
-// ── SAVE NEW BATCH ───────────────────────────────────────────────────────────
+// ── SAVE NEW BATCH (5-Step) ───────────────────────────────────────────────
 window.saveNewBatch = async function() {
-  const purchaseDate  = document.getElementById('n-purchase-date').value;
-  const productName   = document.getElementById('n-product').value.trim();
-  const supplierName  = document.getElementById('n-supplier').value.trim();
-  const invoiceNo     = document.getElementById('n-invoice').value.trim();
-  const supplierBatch = document.getElementById('n-supplier-batch').value.trim();
-  const supplierGSTIN = document.getElementById('n-supplier-gstin')?.value.trim() || '';
-  const supplierFSSAI = document.getElementById('n-supplier-fssai')?.value.trim() || '';
-  const supplierAddr  = document.getElementById('n-supplier-address')?.value.trim() || '';
-  const purchaseQty   = Number(document.getElementById('n-qty').value) || 0;
-  const processingDone = document.getElementById('n-processing').value;
-  const procType      = document.querySelector('input[name="proc-type"]:checked')?.value || '';
-  const finalBatchNo  = document.getElementById('n-final-batch').value.trim() || genFinalBatchNo(productName, purchaseDate);
-  const repackDate    = document.getElementById('n-repack-date').value;
-  const netWeight     = Number(document.getElementById('n-net-weight')?.value) || purchaseQty;
-  const storageAlloc  = getStorageAllocation();
+
+  // ── STEP 0: PURCHASE & QC ──
+  const purchaseDate    = document.getElementById('n-purchase-date').value;
+  const productName     = document.getElementById('n-product').value.trim();
+  const supplierName    = document.getElementById('n-supplier').value.trim();
+  const invoiceNo       = document.getElementById('n-invoice')?.value.trim() || '—';
+  const supplierBatch   = document.getElementById('n-supplier-batch')?.value.trim() || 'NIL';
+  const supplierGSTIN   = document.getElementById('n-supplier-gstin')?.value.trim() || '—';
+  const supplierFSSAI   = document.getElementById('n-supplier-fssai')?.value.trim() || '—';
+  const supplierAddress = document.getElementById('n-supplier-address')?.value.trim() || '—';
+  const purchaseQty     = Number(document.getElementById('n-qty')?.value) || 0;
+
+  // QC Receiving
+  const receivingDate     = document.getElementById('n-receiving-date')?.value || purchaseDate;
+  const internalRMBatchNo = document.getElementById('n-rm-batch-no')?.value.trim() || '—';
+  const qtyReceived       = Number(document.getElementById('n-qty-received')?.value) || purchaseQty;
+  const qtyAccepted       = Number(document.getElementById('n-qty-accepted')?.value) || purchaseQty;
+  const qtyRejected       = Number(document.getElementById('n-qty-rejected')?.value) || 0;
+  const qcStatus          = document.getElementById('n-qc-status')?.value || 'Approved';
+  const inwardStorage     = document.getElementById('n-inward-storage')?.value || 'Dry Storage Room A';
+
+  // ── STEP 1: PROCESSING ──
+  const processingDone  = document.getElementById('n-processing')?.value || 'No';
+  const procType        = document.querySelector('input[name="proc-type"]:checked')?.value || '';
+  const factoryName     = document.getElementById('n-factory-name')?.value.trim() || '—';
+  const challanNo       = document.getElementById('n-process-challan')?.value.trim() || '—';
+  const dispatchToFactory = document.getElementById('n-dispatch-to-factory')?.value || '';
+  const completionDate  = document.getElementById('n-completion-date')?.value
+                        || document.getElementById('n-completion-date-inhouse')?.value || '';
+  const inhouseLocation = document.getElementById('n-inhouse-location')?.value.trim() || '—';
+  const finalBatchNo    = document.getElementById('n-final-batch')?.value.trim() || genFinalBatchNo(productName, purchaseDate);
+  const netWeight       = Number(document.getElementById('n-net-weight')?.value) || qtyAccepted;
+  const repackDate      = document.getElementById('n-repack-date')?.value
+                        || document.getElementById('n-repack-date-direct')?.value || '';
+
+  // Ingredients
+  const ingredientsList = processingDone === 'Yes' ? collectIngredients() : [];
+  const shortPct        = procType === 'factory' ? Number(document.getElementById('factory-shortage-pct')?.value) || 9 : 0;
+  const ingTotalWt      = ingredientsList.reduce((s, i) => s + i.weight, 0);
+  const totalInputQty   = +(purchaseQty + ingTotalWt).toFixed(3);
+  const blendShortage   = +Math.max(0, totalInputQty - netWeight).toFixed(3);
+  const shortageReason  = document.getElementById('n-shortage-reason')?.value.trim() || '—';
+  const qualityApproval = document.getElementById('n-quality-approval')?.value || 'Approved';
+  const shortageQty     = Number(document.getElementById('n-shortage-qty')?.value) || blendShortage;
+  const otherIngredients = ingredientsList.length
+    ? ingredientsList.map(i => `${i.name} (Lot: ${i.batch}) ${i.weight}kg`).join('; ')
+    : '—';
+
+  // ── STEP 2: STORAGE ALLOCATION ──
+  const storageAlloc    = getStorageAllocation();
   const storageLocation = storageAlloc.length
     ? storageAlloc.map(a => `${a.location}${a.qty ? ' ('+a.qty+'kg)' : ''}`).join(', ')
-    : 'Unspecified';
-  const totalFinishedQty = Number(document.getElementById('n-total-finished').value) || 0; // 0 = not packed (Label Maker not used)
-  const dispatchDate  = document.getElementById('n-dispatch-date').value;
-  const dispatchQty   = Number(document.getElementById('n-dispatch-qty').value) || 0;
-  const invoiceRef    = document.getElementById('n-dispatch-ref').value.trim();
+    : inwardStorage;
+  const transferDate    = document.getElementById('n-transfer-date')?.value || '';
+  const stockMoveRef    = document.getElementById('n-stock-ref')?.value.trim() || '—';
 
-  // Ingredients — both factory AND blend
-  const ingredientsList = processingDone === 'Yes' ? collectIngredients() : [];
-  const shortPct = procType === 'factory' ? Number(document.getElementById('factory-shortage-pct')?.value) || 9 : 0;
-  const ingTotalWt = ingredientsList.reduce((s, i) => s + i.weight, 0);
-  const blendShortage = procType === 'factory' ? +(ingTotalWt * shortPct / 100).toFixed(3) : 0;
-  const otherIngredients = ingredientsList.length
-    ? ingredientsList.map(i => i.name + ' (Lot: ' + i.batch + ') ' + i.weight + 'kg').join('; ')
-    : '—';
-  // Post-processing challan (Step 2)
-  const challanNo = document.getElementById('n-process-challan')?.value.trim() || '';
+  // ── STEP 3: PACKING ──
+  const packingBatchNo  = document.getElementById('n-packing-batch-no')?.value.trim() || '—';
+  const packingDate     = document.getElementById('n-packing-date')?.value || repackDate;
+  const bulkQtyUsed     = Number(document.getElementById('n-bulk-qty-used')?.value) || 0;
+  const expiryDate      = document.getElementById('n-expiry-date')?.value || '';
+  const totalFinishedQty = Number(document.getElementById('n-total-finished')?.value) || 0;
+  const packingLoss     = Number(document.getElementById('n-packing-loss')?.value) || 0;
+  const balanceBulkStock = bulkQtyUsed > 0 ? +Math.max(0, bulkQtyUsed - totalFinishedQty).toFixed(3) : 0;
+  const pkgCount        = Number(document.getElementById('n-pkg-count')?.value) || 0;
 
-  // Balance = Finished Qty → Net Weight → Purchase Qty (in order of priority)
-  const baseQty = totalFinishedQty > 0 ? totalFinishedQty : netWeight > 0 ? netWeight : purchaseQty;
-  const balanceStock = Number((baseQty - dispatchQty).toFixed(2));
+  // ── STEP 4: DISPATCH ──
+  const customerName    = document.getElementById('n-customer-name')?.value.trim() || '—';
+  const customerAddress = document.getElementById('n-customer-address')?.value.trim() || '—';
+  const dispatchDate    = document.getElementById('n-dispatch-date')?.value || '';
+  const dispatchQty     = Number(document.getElementById('n-dispatch-qty')?.value) || 0;
+  const invoiceRef      = document.getElementById('n-dispatch-ref')?.value.trim() || '—';
+  const transportDetails = document.getElementById('n-transport-details')?.value.trim() || '—';
+
+  // Balance stock
+  const baseQty    = totalFinishedQty > 0 ? totalFinishedQty : netWeight > 0 ? netWeight : purchaseQty;
+  const balanceStock = +(baseQty - dispatchQty).toFixed(2);
 
   if (!purchaseDate || !productName || !supplierName) {
     showToast('Please fill Date, Product Name, and Supplier.');
@@ -1173,31 +1411,70 @@ window.saveNewBatch = async function() {
   const record = {
     id: newId,
     srNo: allBatches.length + 1,
+
+    // Purchase & QC
     purchaseDate,
     displayPurchaseDate: formatDate(d),
     productName,
     supplierName,
-    supplierBatch: supplierBatch || 'NIL',
-    invoiceNo: invoiceNo || '—',
-    challanNo: challanNo || '—',
-    supplierGSTIN: supplierGSTIN || '—',
-    supplierFSSAI: supplierFSSAI || '—',
-    supplierAddress: supplierAddr || '—',
+    supplierBatch,
+    invoiceNo,
+    supplierGSTIN,
+    supplierFSSAI,
+    supplierAddress,
     purchaseQty,
+    receivingDate,
+    internalRMBatchNo,
+    qtyReceived,
+    qtyAccepted,
+    qtyRejected,
+    qcStatus,
+    inwardStorage,
+
+    // Processing
     processingDone,
     processingType: procType || '—',
-    ingredients: ingredientsList,
-    otherIngredients,
-    blendShortage,
+    factoryName,
+    challanNo,
+    dispatchToFactory: dispatchToFactory ? formatDate(new Date(dispatchToFactory + 'T00:00:00')) : '—',
+    completionDate: completionDate ? formatDate(new Date(completionDate + 'T00:00:00')) : '—',
+    inhouseLocation,
     finalBatchNo,
     netWeight,
     repackingDate: repackDate ? formatDate(new Date(repackDate + 'T00:00:00')) : formatDate(d),
+    ingredients: ingredientsList,
+    otherIngredients,
+    totalInputQty,
+    shortageQty,
+    blendShortage,
+    shortageReason,
+    qualityApproval,
+
+    // Storage
     storageLocation,
     storageAllocation: storageAlloc,
+    transferDate: transferDate ? formatDate(new Date(transferDate + 'T00:00:00')) : '—',
+    stockMoveRef,
+
+    // Packing
+    packingBatchNo,
+    packingDate: packingDate ? formatDate(new Date(packingDate + 'T00:00:00')) : '—',
+    bulkQtyUsed: bulkQtyUsed || '—',
+    expiryDate: expiryDate ? formatDate(new Date(expiryDate + 'T00:00:00')) : '—',
     totalFinishedQty,
+    packingLoss,
+    balanceBulkStock,
+    pkgCount,
+
+    // Dispatch
+    customerName,
+    customerAddress,
     dispatchDate: dispatchDate ? formatDate(new Date(dispatchDate + 'T00:00:00')) : '—',
     dispatchQty: dispatchQty || '—',
-    invoiceRef: invoiceRef || (dispatchQty > 0 ? `DIS/${String(allBatches.length + 1).padStart(4, '0')}` : '—'),
+    invoiceRef: invoiceRef !== '—' ? invoiceRef : (dispatchQty > 0 ? `DIS/${String(allBatches.length + 1).padStart(4, '0')}` : '—'),
+    transportDetails,
+
+    // Compliance defaults
     balanceStock,
     complaint: 'None',
     actionTaken: '—',
