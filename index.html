@@ -87,7 +87,6 @@
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
 
 
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:10px;">
@@ -107,7 +106,10 @@
           &#x2705; B &#x2014; Raw Material Receiving &amp; Quality Check
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-row">
+          <label>Internal RM Batch No.</label>
+          <input type="text" id="n-rm-batch-no" placeholder="e.g. RM-CUMIN-001" />
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Auto-generated or enter manually</div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
@@ -300,10 +302,6 @@
               <div class="form-row">
                 <label>Shortage Qty (KG)</label>
                 <input type="number" id="n-shortage-qty" placeholder="Auto" readonly style="background:#FEF2F2;font-weight:700;color:#DC2626;" />
-              </div>
-              <div class="form-row">
-                <label>Shortage %</label>
-                <input type="text" id="n-shortage-pct-display" placeholder="Auto" readonly style="background:#FEF2F2;font-weight:700;color:#DC2626;" />
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
