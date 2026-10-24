@@ -88,20 +88,7 @@
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-          <div class="form-row">
-            <label>Supplier GSTIN</label>
-            <input type="text" id="n-supplier-gstin" placeholder="e.g. 07AABCU9603R1ZX" maxlength="15" style="text-transform:uppercase;" />
-          </div>
-          <div class="form-row">
-            <label>Supplier FSSAI No.</label>
-            <input type="text" id="n-supplier-fssai" placeholder="e.g. 10014011000123" maxlength="14" />
-          </div>
-        </div>
 
-        <div class="form-row" style="margin-top:10px;">
-          <label>Supplier Address</label>
-          <input type="text" id="n-supplier-address" placeholder="e.g. 12, Spice Market, Khari Baoli, Delhi" />
-        </div>
 
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:10px;">
           <div class="form-row">
@@ -121,15 +108,6 @@
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-row">
-            <label>Receiving Date</label>
-            <input type="date" id="n-receiving-date" />
-          </div>
-          <div class="form-row">
-            <label>Internal RM Batch No.</label>
-            <input type="text" id="n-rm-batch-no" placeholder="e.g. RM-CUMIN-001" />
-            <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">Auto-generated or enter manually</div>
-          </div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
@@ -322,6 +300,10 @@
               <div class="form-row">
                 <label>Shortage Qty (KG)</label>
                 <input type="number" id="n-shortage-qty" placeholder="Auto" readonly style="background:#FEF2F2;font-weight:700;color:#DC2626;" />
+              </div>
+              <div class="form-row">
+                <label>Shortage %</label>
+                <input type="text" id="n-shortage-pct-display" placeholder="Auto" readonly style="background:#FEF2F2;font-weight:700;color:#DC2626;" />
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
@@ -584,20 +566,7 @@
         <label>Supplier Name</label>
         <input type="text" id="e-supplier-name" placeholder="e.g. Vijay Masala Wholesale" />
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Supplier GSTIN</label>
-          <input type="text" id="e-supplier-gstin" placeholder="15-digit GSTIN" />
-        </div>
-        <div class="form-row">
-          <label>Supplier FSSAI No.</label>
-          <input type="text" id="e-supplier-fssai" placeholder="14-digit FSSAI" />
-        </div>
-      </div>
-      <div class="form-row" style="margin-top:10px;">
-        <label>Supplier Address</label>
-        <input type="text" id="e-supplier-address" placeholder="Full address" />
-      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
         <div class="form-row">
           <label>Supplier Lot / Batch No.</label>

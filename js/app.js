@@ -186,21 +186,18 @@ async function init() {
     updateLabelSyncIndicator();
   });
 
-  // 2. Load existing batches (Merge Local + Firebase Cloud)
-  const localList = loadLocal().filter(b => b && !String(b.id || '').startsWith('BTR-00'));
+  // 2. Load batches — Firebase is source of truth, local is offline fallback only
   const cloudList = await loadAllBatches();
-  const map = {};
-
-  localList.forEach(b => { if (b?.id) map[b.id] = b; });
-  cloudList.forEach(b => {
-    if (b?.id && !b.isGenerated && !String(b.id).startsWith('BTR-00')) {
-      map[b.id] = { ...(map[b.id] || {}), ...b };
-    }
-  });
-
-  allBatches = Object.values(map).sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''));
-  allBatches.forEach((b, i) => { b.srNo = i + 1; });
-  saveLocal(allBatches);
+  if (cloudList && cloudList.length > 0) {
+    allBatches = cloudList.filter(b => b && !b.isGenerated && !String(b.id || '').startsWith('BTR-00'))
+      .sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''));
+    allBatches.forEach((b, i) => { b.srNo = i + 1; });
+    saveLocal(allBatches); // cache for offline fallback
+  } else {
+    // Offline fallback: use local cache
+    allBatches = loadLocal().filter(b => b && !String(b.id || '').startsWith('BTR-00'));
+    allBatches.forEach((b, i) => { b.srNo = i + 1; });
+  }
 
   filteredBatches = [...allBatches];
   renderStats();
@@ -481,6 +478,7 @@ window.openBatch = function(id) {
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0;">
           <button onclick="openEditModal('${b.id}')" class="btn-sidebar-ghost" style="padding:7px 12px;font-size:11px;">\u270f\ufe0f Edit</button>
+          <button onclick="openEditModal('${b.id}')" style="padding:7px 12px;font-size:11px;background:linear-gradient(135deg,#6366F1,#4F46E5);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;">\ud83d\udd04 Update</button>
           <button onclick="deleteBatch('${b.id}')" style="padding:7px 12px;font-size:11px;background:#FEF2F2;color:#DC2626;border:1.5px solid #FECACA;border-radius:8px;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:5px;"><svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='12' height='12'><polyline points='3 6 5 6 21 6'/><path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'/><path d='M10 11v6'/><path d='M14 11v6'/><path d='M9 6V4h6v2'/></svg>Delete</button>
         </div>
       </div>
@@ -488,9 +486,6 @@ window.openBatch = function(id) {
       <!-- 1. SUPPLIER / RAW MATERIAL PURCHASE -->
       ${section('#EFF6FF', '\ud83d\udccb', '1 \u2014 Supplier / Raw Material Purchase',
           row('\ud83c\udfe2', 'Supplier Name',    `<strong style="font-size:13px;">${b.supplierName || '\u2014'}</strong>`)
-        + row('\ud83d\udd22', 'Supplier GSTIN',   b.supplierGSTIN || '\u2014')
-        + row('\ud83c\udf7d\ufe0f', 'Supplier FSSAI',   b.supplierFSSAI || '\u2014')
-        + row('\ud83d\udccd', 'Supplier Address', b.supplierAddress || '\u2014')
         + row('\ud83c\udff7\ufe0f', 'Supplier Lot / Batch', `<code style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:5px;">${b.supplierBatch || 'NIL'}</code>`)
         + row('\ud83d\udcc4', 'Purchase Invoice', `<strong style="color:#1D4ED8;">${b.invoiceNo || '\u2014'}</strong>`)
         + row('\ud83d\udcc5', 'Purchase Date',    b.displayPurchaseDate || formatDate(b.purchaseDate))
@@ -499,8 +494,7 @@ window.openBatch = function(id) {
 
       <!-- 2. RAW MATERIAL RECEIVING & QUALITY CHECK -->
       ${section('#ECFDF5', '\u2705', '2 \u2014 Raw Material Receiving & Quality Check',
-          row('\ud83d\udcc5', 'Receiving Date',      b.receivingDate ? formatDate(new Date(b.receivingDate + 'T00:00:00')) : '\u2014')
-        + row('\ud83c\udd94', 'Internal RM Batch No.', `<code style="background:#DCFCE7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700;">${b.internalRMBatchNo || '\u2014'}</code>`)
+row('\ud83c\udd94', 'Internal RM Batch No.', `<code style="background:#DCFCE7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700;">${b.internalRMBatchNo || '\u2014'}</code>`)
         + row('\ud83d\udce6', 'Qty Received',        `${b.qtyReceived || purchaseQty} kg`)
         + row('\u2705', 'Qty Accepted',        `<strong style="color:#059669;">${b.qtyAccepted || purchaseQty} kg</strong>`)
         + row('\u274c', 'Qty Rejected',        `<span style="color:${Number(b.qtyRejected) > 0 ? '#DC2626' : '#6B7280'};font-weight:${Number(b.qtyRejected) > 0 ? '700' : '400'};">${b.qtyRejected || 0} kg</span>`)
@@ -532,6 +526,7 @@ window.openBatch = function(id) {
       <!-- 5/6. PROCESSING OUTPUT & SHORTAGE -->
       ${b.processingDone === 'Yes' ? section('#FFF1F2', '\u26a0\ufe0f', '5 \u2014 Processing Output & Shortage',
           shortageBlock
+        + (shortage > 0 ? row('\ud83d\udcca', 'Shortage %', `<span style="color:#DC2626;font-weight:700;">${b.shortagePct || +((shortage/totalInputWt)*100).toFixed(2)}%</span>`) : '')
         + row('\ud83d\udce4', 'Net Output (kg)', `<strong style="font-size:16px;color:${shortage > 0 ? '#DC2626' : '#059669'};">${netWt} kg</strong>`)
         + (b.shortageReason && b.shortageReason !== '\u2014' ? row('\ud83d\udcac', 'Reason for Shortage', b.shortageReason) : '')
         + chipRow('\ud83d\udd2c', 'Quality Approval', qaChip)
@@ -651,8 +646,7 @@ window.openNewModal = function() {
 
   // Clear all text/number fields
   [
-    'n-product','n-invoice','n-supplier','n-supplier-batch','n-supplier-gstin',
-    'n-supplier-fssai','n-supplier-address','n-rm-batch-no',
+    'n-product','n-invoice','n-supplier','n-supplier-batch','n-rm-batch-no',
     'n-final-batch','n-process-challan','n-factory-name','n-inhouse-location',
     'n-shortage-reason','n-stock-ref',
     'n-packing-batch-no','n-customer-name','n-customer-address','n-transport-details',
@@ -668,7 +662,7 @@ window.openNewModal = function() {
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
   // Set date defaults
-  ['n-purchase-date','n-receiving-date','n-transfer-date'].forEach(id => {
+  ['n-purchase-date','n-transfer-date'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = today;
   });
   ['n-dispatch-to-factory','n-completion-date','n-completion-date-inhouse',
@@ -984,8 +978,13 @@ window.onOutputQtyChange = function() {
   const input  = Number(document.getElementById('n-total-input')?.value) || 0;
   const output = Number(document.getElementById('n-total-output')?.value) || 0;
   const shEl   = document.getElementById('n-shortage-qty');
+  const shPctEl = document.getElementById('n-shortage-pct-display');
   const nwEl   = document.getElementById('n-net-weight');
-  if (shEl && input > 0) shEl.value = Math.max(0, +(input - output).toFixed(3));
+  if (input > 0) {
+    const shortage = Math.max(0, +(input - output).toFixed(3));
+    if (shEl) shEl.value = shortage;
+    if (shPctEl) shPctEl.value = +((shortage / input) * 100).toFixed(2) + '%';
+  }
   if (nwEl && output > 0) nwEl.value = output;
 };
 
@@ -1077,7 +1076,6 @@ window.onOCRFileSelected = async function(input) {
     if (data.supplier_name) document.getElementById('n-supplier').value = data.supplier_name;
     if (data.gstin)         { const el = document.getElementById('n-supplier-gstin'); if(el) el.value = data.gstin; }
     if (data.fssai_no)      { const el = document.getElementById('n-supplier-fssai'); if(el) el.value = data.fssai_no; }
-    if (data.supplier_address) { const el = document.getElementById('n-supplier-address'); if(el) el.value = data.supplier_address; }
 
     currentOcrItems = items || [];
 
@@ -1328,13 +1326,10 @@ window.saveNewBatch = async function() {
   const supplierName    = document.getElementById('n-supplier').value.trim();
   const invoiceNo       = document.getElementById('n-invoice')?.value.trim() || '—';
   const supplierBatch   = document.getElementById('n-supplier-batch')?.value.trim() || 'NIL';
-  const supplierGSTIN   = document.getElementById('n-supplier-gstin')?.value.trim() || '—';
-  const supplierFSSAI   = document.getElementById('n-supplier-fssai')?.value.trim() || '—';
-  const supplierAddress = document.getElementById('n-supplier-address')?.value.trim() || '—';
+
   const purchaseQty     = Number(document.getElementById('n-qty')?.value) || 0;
 
   // QC Receiving
-  const receivingDate     = document.getElementById('n-receiving-date')?.value || purchaseDate;
   const internalRMBatchNo = document.getElementById('n-rm-batch-no')?.value.trim() || '—';
   const qtyReceived       = Number(document.getElementById('n-qty-received')?.value) || purchaseQty;
   const qtyAccepted       = Number(document.getElementById('n-qty-accepted')?.value) || purchaseQty;
@@ -1365,6 +1360,7 @@ window.saveNewBatch = async function() {
   const shortageReason  = document.getElementById('n-shortage-reason')?.value.trim() || '—';
   const qualityApproval = document.getElementById('n-quality-approval')?.value || 'Approved';
   const shortageQty     = Number(document.getElementById('n-shortage-qty')?.value) || blendShortage;
+  const shortagePct     = totalInputQty > 0 ? +((shortageQty / totalInputQty) * 100).toFixed(2) : 0;
   const otherIngredients = ingredientsList.length
     ? ingredientsList.map(i => `${i.name} (Lot: ${i.batch}) ${i.weight}kg`).join('; ')
     : '—';
@@ -1419,11 +1415,7 @@ window.saveNewBatch = async function() {
     supplierName,
     supplierBatch,
     invoiceNo,
-    supplierGSTIN,
-    supplierFSSAI,
-    supplierAddress,
     purchaseQty,
-    receivingDate,
     internalRMBatchNo,
     qtyReceived,
     qtyAccepted,
@@ -1446,6 +1438,7 @@ window.saveNewBatch = async function() {
     otherIngredients,
     totalInputQty,
     shortageQty,
+    shortagePct,
     blendShortage,
     shortageReason,
     qualityApproval,
@@ -1583,9 +1576,6 @@ window.openEditModal = function(id) {
   document.getElementById('e-purchase-date').value   = purchDateInput;
   document.getElementById('e-invoice-no').value      = b.invoiceNo && b.invoiceNo !== '—' ? b.invoiceNo : '';
   document.getElementById('e-supplier-name').value   = b.supplierName || '';
-  document.getElementById('e-supplier-gstin').value  = b.supplierGSTIN && b.supplierGSTIN !== '—' ? b.supplierGSTIN : '';
-  document.getElementById('e-supplier-fssai').value  = b.supplierFSSAI && b.supplierFSSAI !== '—' ? b.supplierFSSAI : '';
-  document.getElementById('e-supplier-address').value= b.supplierAddress && b.supplierAddress !== '—' ? b.supplierAddress : '';
   document.getElementById('e-supplier-batch').value  = b.supplierBatch && b.supplierBatch !== 'NIL' ? b.supplierBatch : '';
   document.getElementById('e-purchase-qty').value    = b.purchaseQty || '';
 
@@ -1663,9 +1653,6 @@ window.saveBatchEdit = async function() {
   const purchaseDateRaw = document.getElementById('e-purchase-date').value;
   const invoiceNo     = document.getElementById('e-invoice-no').value.trim() || '—';
   const supplierName  = document.getElementById('e-supplier-name').value.trim() || _currentEditBatch.supplierName;
-  const supplierGSTIN = document.getElementById('e-supplier-gstin').value.trim() || '—';
-  const supplierFSSAI = document.getElementById('e-supplier-fssai').value.trim() || '—';
-  const supplierAddress = document.getElementById('e-supplier-address').value.trim() || '—';
   const supplierBatch = document.getElementById('e-supplier-batch').value.trim() || 'NIL';
   const purchaseQty   = Number(document.getElementById('e-purchase-qty').value) || _currentEditBatch.purchaseQty || 0;
 
@@ -1698,9 +1685,6 @@ window.saveBatchEdit = async function() {
     displayPurchaseDate: purchaseDateRaw ? formatDate(new Date(purchaseDateRaw + 'T00:00:00')) : _currentEditBatch.displayPurchaseDate,
     invoiceNo,
     supplierName,
-    supplierGSTIN,
-    supplierFSSAI,
-    supplierAddress,
     supplierBatch,
     purchaseQty,
     // Processing
@@ -1797,9 +1781,6 @@ window.exportExcel = function() {
         b.displayPurchaseDate || formatDate(b.purchaseDate),
         b.invoiceNo || '—',
         b.supplierName || '—',
-        b.supplierGSTIN || '—',
-        b.supplierFSSAI || '—',
-        b.supplierAddress || '—',
         b.supplierBatch || 'NIL',
         b.purchaseQty || 0,
         b.processingDone || 'No',
