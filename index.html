@@ -504,9 +504,9 @@
   </div>
 </div>
 
-<!-- EDIT BATCH RECORD MODAL (for editing complaint, recall status, dispatch, etc.) -->
+<!-- EDIT BATCH RECORD MODAL — mirrors detail view UI with editable inputs -->
 <div class="modal-overlay" id="edit-modal-overlay" onclick="if(event.target===this)closeEditModal()">
-  <div class="modal-box" style="max-width:640px;max-height:90vh;overflow-y:auto;">
+  <div class="modal-box" style="max-width:660px;max-height:92vh;overflow-y:auto;">
     <div class="modal-header" style="position:sticky;top:0;z-index:10;background:#fff;">
       <div class="modal-title-wrap">
         <span class="modal-icon-badge">
@@ -519,77 +519,78 @@
       </div>
       <button class="modal-close" onclick="closeEditModal()">✕</button>
     </div>
-    <div class="modal-body" style="padding-top:14px;">
+    <div class="modal-body" style="padding-top:10px;">
       <input type="hidden" id="e-batch-id" />
 
-      <!-- ── PROCUREMENT ── -->
-      <div style="padding:8px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;font-size:12px;color:#1D4ED8;margin-bottom:10px;font-weight:700;">
-        📋 Procurement & Supplier
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div class="form-row">
-          <label>Product Name</label>
-          <input type="text" id="e-product-name" placeholder="e.g. Red Chilli Powder" />
+      <!-- 1 — SUPPLIER / PURCHASE (blue) -->
+      <div style="background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">📋 1 — Supplier / Raw Material Purchase</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-row"><label>Product Name</label><input type="text" id="e-product-name" placeholder="e.g. Red Chilli Powder" /></div>
+          <div class="form-row"><label>Final Batch No.</label><input type="text" id="e-final-batch-no" placeholder="e.g. RC-1026" /></div>
         </div>
-        <div class="form-row">
-          <label>Final Batch No.</label>
-          <input type="text" id="e-final-batch-no" placeholder="e.g. RC-1026" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Purchase Date</label><input type="date" id="e-purchase-date" /></div>
+          <div class="form-row"><label>Invoice No.</label><input type="text" id="e-invoice-no" placeholder="e.g. INV/2026/001" /></div>
         </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Purchase Date</label>
-          <input type="date" id="e-purchase-date" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Supplier Name</label><input type="text" id="e-supplier-name" placeholder="e.g. Vijay Masala Wholesale" /></div>
+          <div class="form-row"><label>Supplier Lot / Batch No.</label><input type="text" id="e-supplier-batch" placeholder="e.g. VMW-901 or NIL" /></div>
         </div>
-        <div class="form-row">
-          <label>Invoice No.</label>
-          <input type="text" id="e-invoice-no" placeholder="e.g. INV/2026/001" />
-        </div>
-      </div>
-      <div class="form-row" style="margin-top:10px;">
-        <label>Supplier Name</label>
-        <input type="text" id="e-supplier-name" placeholder="e.g. Vijay Masala Wholesale" />
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Supplier Lot / Batch No.</label>
-          <input type="text" id="e-supplier-batch" placeholder="e.g. VMW-901 or NIL" />
-        </div>
-        <div class="form-row">
-          <label>Raw Purchase Qty (kg)</label>
-          <input type="number" id="e-purchase-qty" placeholder="0" min="0" step="any" />
+        <div style="margin-top:8px;">
+          <div class="form-row"><label>Raw Purchase Qty (kg)</label><input type="number" id="e-purchase-qty" placeholder="0" min="0" step="any" /></div>
         </div>
       </div>
 
-      <!-- ── PROCESSING ── -->
-      <div style="margin-top:16px;padding:8px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#B45309;font-weight:700;">
-        ⚙️ Processing
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Net Weight After Processing (kg)</label>
-          <input type="number" id="e-net-weight" placeholder="0" min="0" step="any" />
+      <!-- 2 — QC (green) -->
+      <div style="background:#ECFDF5;border:1.5px solid #A7F3D0;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">✅ 2 — Raw Material Receiving &amp; Quality Check</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-row"><label>Internal RM Batch No.</label><input type="text" id="e-rm-batch-no" placeholder="e.g. RM-CUMIN-001" /></div>
+          <div class="form-row"><label>Qty Received (kg)</label><input type="number" id="e-qty-received" placeholder="0" min="0" step="any" /></div>
         </div>
-        <div class="form-row">
-          <label>Shortage (kg)</label>
-          <input type="number" id="e-shortage" placeholder="0" min="0" step="any" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Qty Accepted (kg)</label><input type="number" id="e-qty-accepted" placeholder="0" min="0" step="any" /></div>
+          <div class="form-row"><label>Qty Rejected (kg)</label><input type="number" id="e-qty-rejected" placeholder="0" min="0" step="any" /></div>
         </div>
-      </div>
-      <div class="form-row" style="margin-top:10px;">
-        <label>Post-Processing Challan No.</label>
-        <input type="text" id="e-challan-no" placeholder="e.g. CH/2026/001" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row">
+            <label>QC Status</label>
+            <select id="e-qc-status">
+              <option value="Approved">✅ Approved</option>
+              <option value="Conditional">⚠️ Conditional Approval</option>
+              <option value="Rejected">❌ Rejected</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Inward Storage</label>
+            <select id="e-inward-storage">
+              <option>Dry Storage Room A</option>
+              <option>Dry Storage Room B</option>
+              <option>Cold Storage</option>
+              <option>Packing Area Store</option>
+              <option>Shop / Retail</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <!-- ── STORAGE & PACKAGING ── -->
-      <div style="margin-top:16px;padding:8px 12px;background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;font-size:12px;color:#065F46;font-weight:700;">
-        📦 Storage & Packaging
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Repacking Date</label>
-          <input type="date" id="e-repacking-date" />
+      <!-- 3 — PROCESSING (yellow) -->
+      <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">⚙️ 3 — Processing</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-row"><label>Net Weight After Processing (kg)</label><input type="number" id="e-net-weight" placeholder="0" min="0" step="any" oninput="updateEditBalancePreview()" /></div>
+          <div class="form-row"><label>Shortage (kg)</label><input type="number" id="e-shortage" placeholder="0" min="0" step="any" /></div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Post-Processing Challan No.</label><input type="text" id="e-challan-no" placeholder="e.g. CH/2026/001" /></div>
+          <div class="form-row"><label>Repacking Date</label><input type="date" id="e-repacking-date" /></div>
+        </div>
+      </div>
+
+      <!-- STORAGE (light blue) -->
+      <div style="background:#F0F9FF;border:1.5px solid #BAE6FD;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#0369A1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">🗄️ Storage Location</div>
         <div class="form-row">
           <label>Storage Location</label>
           <select id="e-storage">
@@ -602,56 +603,42 @@
         </div>
       </div>
 
-      <!-- ── DISPATCH ── -->
-      <div style="margin-top:16px;padding:8px 12px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;font-size:12px;color:#5B21B6;font-weight:700;">
-        🚚 Dispatch & Stock
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Dispatch Date</label>
-          <input type="date" id="e-dispatch-date" />
+      <!-- 10 — DISPATCH (orange) -->
+      <div style="background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#C2410C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">🚚 Customer Dispatch</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div class="form-row"><label>Dispatch Date</label><input type="date" id="e-dispatch-date" /></div>
+          <div class="form-row"><label>Dispatch Qty (kg)</label><input type="number" id="e-dispatch-qty" placeholder="0" min="0" step="any" oninput="updateEditBalancePreview()" /></div>
+          <div class="form-row"><label>Invoice / Dispatch Ref</label><input type="text" id="e-dispatch-ref" placeholder="e.g. DIS/2026/001" /></div>
         </div>
-        <div class="form-row">
-          <label>Dispatch Qty (kg)</label>
-          <input type="number" id="e-dispatch-qty" placeholder="0" min="0" step="any" oninput="updateEditBalancePreview()" />
-        </div>
-        <div class="form-row">
-          <label>Invoice / Dispatch Ref</label>
-          <input type="text" id="e-dispatch-ref" placeholder="e.g. DIS/2026/001" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Customer Name</label><input type="text" id="e-customer-name" placeholder="e.g. Sharma Store" /></div>
+          <div class="form-row"><label>Transport / LR No.</label><input type="text" id="e-transport" placeholder="e.g. LR/TRP/001" /></div>
         </div>
       </div>
 
-      <!-- ── COMPLIANCE ── -->
-      <div style="margin-top:16px;padding:8px 12px;background:#FFF1F2;border:1px solid #FECDD3;border-radius:8px;font-size:12px;color:#BE123C;font-weight:700;">
-        ⚠️ Recall & Compliance
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Recall Status</label>
-          <select id="e-recall-status">
-            <option value="Closed">Closed (Cleared / Normal)</option>
-            <option value="Open">Open (Active Issue / Recall)</option>
-            <option value="Under Investigation">Under Investigation</option>
-          </select>
+      <!-- RECALL (red) -->
+      <div style="background:#FFF1F2;border:1.5px solid #FECDD3;border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#BE123C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">⚠️ Recall &amp; Compliance</div>
+        <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:10px;">
+          <div class="form-row">
+            <label>Recall Status</label>
+            <select id="e-recall-status">
+              <option value="Closed">Closed (Cleared / Normal)</option>
+              <option value="Open">Open (Active Issue / Recall)</option>
+              <option value="Under Investigation">Under Investigation</option>
+            </select>
+          </div>
+          <div class="form-row"><label>Complaint / Defect Details</label><input type="text" id="e-complaint" placeholder="e.g. None / Moisture / Packaging defect" /></div>
         </div>
-        <div class="form-row">
-          <label>Complaint / Defect Details</label>
-          <input type="text" id="e-complaint" placeholder="e.g. None / Moisture / Packaging defect" />
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin-top:10px;">
-        <div class="form-row">
-          <label>Action Taken / Resolution</label>
-          <input type="text" id="e-action-taken" placeholder="e.g. Lot verified, cleared by QC" />
-        </div>
-        <div class="form-row">
-          <label>Verified By</label>
-          <input type="text" id="e-verified-by" placeholder="Bhimlal Sharma" />
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px;margin-top:8px;">
+          <div class="form-row"><label>Action Taken / Resolution</label><input type="text" id="e-action-taken" placeholder="e.g. Lot verified, cleared by QC" /></div>
+          <div class="form-row"><label>Verified By</label><input type="text" id="e-verified-by" placeholder="Bhimlal Sharma" /></div>
         </div>
       </div>
 
       <!-- Balance preview -->
-      <div style="margin-top:14px;padding:10px 14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="padding:10px 14px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;color:var(--text-secondary);font-weight:600;">Updated Balance Stock:</span>
         <span style="font-size:16px;font-weight:800;color:var(--brand-primary);" id="e-balance-preview">—</span>
       </div>

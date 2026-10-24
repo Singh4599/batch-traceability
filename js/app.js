@@ -1487,6 +1487,14 @@ window.openEditModal = function(id) {
   document.getElementById('e-shortage').value     = b.blendShortage || '';
   document.getElementById('e-challan-no').value   = b.challanNo && b.challanNo !== '—' ? b.challanNo : '';
 
+  // ── QC ──
+  const rmBatchEl = document.getElementById('e-rm-batch-no'); if (rmBatchEl) rmBatchEl.value = b.internalRMBatchNo && b.internalRMBatchNo !== '—' ? b.internalRMBatchNo : '';
+  const qtyRecEl = document.getElementById('e-qty-received'); if (qtyRecEl) qtyRecEl.value = b.qtyReceived || '';
+  const qtyAccEl = document.getElementById('e-qty-accepted'); if (qtyAccEl) qtyAccEl.value = b.qtyAccepted || '';
+  const qtyRejEl = document.getElementById('e-qty-rejected'); if (qtyRejEl) qtyRejEl.value = b.qtyRejected || '';
+  const qcSel = document.getElementById('e-qc-status'); if (qcSel) qcSel.value = b.qcStatus || 'Approved';
+  const inwardSel = document.getElementById('e-inward-storage'); if (inwardSel) { const iv = b.inwardStorage || 'Dry Storage Room A'; const mo = Array.from(inwardSel.options).find(o => o.value === iv); inwardSel.value = mo ? iv : inwardSel.options[0].value; }
+
   // ── STORAGE ──
   let repackInput = '';
   if (b.repackingDate) {
@@ -1510,6 +1518,8 @@ window.openEditModal = function(id) {
   document.getElementById('e-dispatch-date').value = dispDateInput;
   document.getElementById('e-dispatch-qty').value  = b.dispatchQty && b.dispatchQty !== '—' ? b.dispatchQty : '';
   document.getElementById('e-dispatch-ref').value  = b.invoiceRef && b.invoiceRef !== '—' ? b.invoiceRef : '';
+  const custEl = document.getElementById('e-customer-name'); if (custEl) custEl.value = b.customerName && b.customerName !== '—' ? b.customerName : '';
+  const transEl = document.getElementById('e-transport'); if (transEl) transEl.value = b.transportDetails && b.transportDetails !== '—' ? b.transportDetails : '';;
 
   // ── COMPLIANCE ──
   document.getElementById('e-recall-status').value = b.recallStatus || 'Closed';
@@ -1576,6 +1586,18 @@ window.saveBatchEdit = async function() {
   const actionTaken   = document.getElementById('e-action-taken').value.trim() || '—';
   const verifiedBy    = document.getElementById('e-verified-by').value.trim() || 'Bhimlal Sharma';
 
+  // ── QC fields ──
+  const internalRMBatchNo = document.getElementById('e-rm-batch-no')?.value.trim() || _currentEditBatch.internalRMBatchNo || '—';
+  const qtyReceived   = Number(document.getElementById('e-qty-received')?.value) || _currentEditBatch.qtyReceived || purchaseQty;
+  const qtyAccepted   = Number(document.getElementById('e-qty-accepted')?.value) || _currentEditBatch.qtyAccepted || purchaseQty;
+  const qtyRejected   = Number(document.getElementById('e-qty-rejected')?.value) || 0;
+  const qcStatus      = document.getElementById('e-qc-status')?.value || _currentEditBatch.qcStatus || 'Approved';
+  const inwardStorage = document.getElementById('e-inward-storage')?.value || _currentEditBatch.inwardStorage || 'Dry Storage Room A';
+
+  // ── Customer / Transport ──
+  const customerName     = document.getElementById('e-customer-name')?.value.trim() || _currentEditBatch.customerName || '—';
+  const transportDetails = document.getElementById('e-transport')?.value.trim() || _currentEditBatch.transportDetails || '—';
+
   // Balance = netWeight - dispatchQty
   const baseQty = netWeight > 0 ? netWeight : Number(_currentEditBatch.totalFinishedQty) || purchaseQty;
   const balanceStock = Number((baseQty - dispatchQty).toFixed(2));
@@ -1608,6 +1630,16 @@ window.saveBatchEdit = async function() {
     complaint,
     actionTaken,
     verifiedBy,
+    // QC
+    internalRMBatchNo,
+    qtyReceived,
+    qtyAccepted,
+    qtyRejected,
+    qcStatus,
+    inwardStorage,
+    // Customer
+    customerName,
+    transportDetails,
     balanceStock,
     updatedAt: Date.now()
   };
