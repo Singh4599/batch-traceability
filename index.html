@@ -586,7 +586,23 @@
           <div class="form-row"><label>Post-Processing Challan No.</label><input type="text" id="e-challan-no" placeholder="e.g. CH/2026/001" /></div>
           <div class="form-row"><label>Repacking Date</label><input type="date" id="e-repacking-date" /></div>
         </div>
+
+        <!-- Ingredient rows editor -->
+        <div style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <label style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.4px;">🌱 Extra Ingredients Added</label>
+            <button type="button" onclick="addEditIngredientRow()" style="background:#FEF9C3;border:1px solid #FDE68A;color:#92400E;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;font-weight:700;">+ Add Ingredient</button>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:4px;">
+            <span style="font-size:10px;color:#92400E;font-weight:600;">Ingredient Name</span>
+            <span style="font-size:10px;color:#92400E;font-weight:600;">Lot No.</span>
+            <span style="font-size:10px;color:#92400E;font-weight:600;">Weight (kg)</span>
+            <span></span>
+          </div>
+          <div id="e-ingredient-rows"></div>
+        </div>
       </div>
+
 
       <!-- STORAGE (light blue) -->
       <div style="background:#F0F9FF;border:1.5px solid #BAE6FD;border-radius:12px;padding:12px 14px;margin-bottom:10px;">

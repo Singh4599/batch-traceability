@@ -1509,6 +1509,17 @@ window.openEditModal = function(id) {
   const matchOpt = Array.from(storageSel.options).find(o => storageVal.toLowerCase().includes(o.value.toLowerCase()));
   storageSel.value = matchOpt ? matchOpt.value : storageSel.options[0].value;
 
+  // ── INGREDIENTS (pre-populate rows) ──
+  const eIngRows = document.getElementById('e-ingredient-rows');
+  if (eIngRows) {
+    const ingList = Array.isArray(b.ingredients) ? b.ingredients : [];
+    if (ingList.length > 0) {
+      eIngRows.innerHTML = ingList.map((ing, idx) => editIngRow(ing.name, ing.batch, ing.weight)).join('');
+    } else {
+      eIngRows.innerHTML = editIngRow('', '', '');
+    }
+  }
+
   // ── DISPATCH ──
   let dispDateInput = '';
   if (b.dispatchDate && b.dispatchDate !== '—') {
@@ -1534,6 +1545,28 @@ window.openEditModal = function(id) {
 window.closeEditModal = function() {
   document.getElementById('edit-modal-overlay').style.display = 'none';
   _currentEditBatch = null;
+};
+
+// Ingredient row template for edit modal
+function editIngRow(name='', batch='', weight='') {
+  return `<div class="e-ing-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:5px;">
+    <input type="text" class="e-ing-name" value="${name}" placeholder="e.g. Coriander Seeds" style="padding:6px 9px;border:1px solid #FDE68A;border-radius:7px;font-size:12px;background:#FFFEF0;" />
+    <input type="text" class="e-ing-batch" value="${batch}" placeholder="NIL" style="padding:6px 9px;border:1px solid #FDE68A;border-radius:7px;font-size:12px;background:#FFFEF0;" />
+    <input type="number" class="e-ing-weight" value="${weight}" placeholder="0" min="0" step="any" style="padding:6px 9px;border:1px solid #FDE68A;border-radius:7px;font-size:12px;background:#FFFEF0;" />
+    <button type="button" onclick="removeEditIngRow(this)" style="background:#FEF2F2;border:1px solid #FECACA;color:#EF4444;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:14px;width:32px;">&#x2715;</button>
+  </div>`;
+}
+
+window.addEditIngredientRow = function() {
+  const c = document.getElementById('e-ingredient-rows');
+  if (c) c.insertAdjacentHTML('beforeend', editIngRow());
+};
+
+window.removeEditIngRow = function(btn) {
+  const row = btn.closest('.e-ing-row');
+  const c = document.getElementById('e-ingredient-rows');
+  if (c && c.querySelectorAll('.e-ing-row').length > 1) row.remove();
+  else { row.querySelector('.e-ing-name').value=''; row.querySelector('.e-ing-batch').value=''; row.querySelector('.e-ing-weight').value=''; }
 };
 
 window.updateEditBalancePreview = function() {
@@ -1586,6 +1619,18 @@ window.saveBatchEdit = async function() {
   const actionTaken   = document.getElementById('e-action-taken').value.trim() || '—';
   const verifiedBy    = document.getElementById('e-verified-by').value.trim() || 'Bhimlal Sharma';
 
+  // ── Collect ingredients from edit rows ──
+  const editIngList = [];
+  document.querySelectorAll('#e-ingredient-rows .e-ing-row').forEach(r => {
+    const n = r.querySelector('.e-ing-name')?.value.trim();
+    const bt = r.querySelector('.e-ing-batch')?.value.trim() || 'NIL';
+    const wt = Number(r.querySelector('.e-ing-weight')?.value) || 0;
+    if (n) editIngList.push({ name: n, batch: bt, weight: wt });
+  });
+  const otherIngredients = editIngList.length
+    ? editIngList.map(i => `${i.name} (Lot: ${i.batch}) ${i.weight}kg`).join('; ')
+    : _currentEditBatch.otherIngredients || '—';
+
   // ── QC fields ──
   const internalRMBatchNo = document.getElementById('e-rm-batch-no')?.value.trim() || _currentEditBatch.internalRMBatchNo || '—';
   const qtyReceived   = Number(document.getElementById('e-qty-received')?.value) || _currentEditBatch.qtyReceived || purchaseQty;
@@ -1618,6 +1663,8 @@ window.saveBatchEdit = async function() {
     netWeight,
     blendShortage,
     challanNo,
+    ingredients: editIngList.length > 0 ? editIngList : _currentEditBatch.ingredients || [],
+    otherIngredients,
     // Storage
     repackingDate: repackDateRaw ? formatDate(new Date(repackDateRaw + 'T00:00:00')) : (_currentEditBatch.repackingDate || '—'),
     storageLocation,
