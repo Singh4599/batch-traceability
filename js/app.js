@@ -280,14 +280,16 @@ function renderTable() {
         </td>
         <td>
           <div class="td-supplier-name">${b.supplierName || '—'}</div>
-          <div style="display:flex;align-items:center;gap:4px;margin-top:2px;flex-wrap:wrap;">
-            ${b.supplierBatch && b.supplierBatch !== 'NIL' && b.supplierBatch !== '—'
-              ? `<span style="font-size:9px;background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;padding:1px 5px;border-radius:4px;font-weight:600;">${b.supplierBatch}</span>` : ''}
-            <span style="font-size:10px;color:#94A3B8;">${b.invoiceNo && b.invoiceNo !== '—' ? '· ' + b.invoiceNo : ''}</span>
-          </div>
+          <div style="font-size:10px;color:#94A3B8;">${b.invoiceNo && b.invoiceNo !== '—' ? b.invoiceNo : ''}</div>
         </td>
-        <td class="td-qty" style="font-weight:700;">${netWt}</td>
-        <td class="td-balance-val" style="color:${balColor};font-weight:800;">${bal}</td>
+        <td class="td-qty" style="text-align:right;">${b.purchaseQty || 0} kg</td>
+        <td class="td-qty" style="font-weight:700;text-align:right;">${netWt} kg</td>
+        <td style="text-align:center">
+          <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${b.qcStatus==='Approved'?'#DCFCE7':'#FEF3C7'};color:${b.qcStatus==='Approved'?'#166534':'#92400E'};">${b.qcStatus || 'Approved'}</span>
+        </td>
+        <td style="text-align:center">${procBadge || '<span style="font-size:10px;color:#94A3B8;">—</span>'}</td>
+        <td style="text-align:right;font-size:12px;">${b.dispatchQty ? b.dispatchQty + ' kg' : '—'}</td>
+        <td class="td-balance-val" style="color:${balColor};font-weight:800;text-align:right;">${bal} kg</td>
         <td style="text-align:center">
           <span class="status-pill ${isRecallOpen ? 'pill-open' : 'pill-closed'}">${b.recallStatus || 'Closed'}</span>
         </td>
@@ -680,11 +682,6 @@ window.openNewModal = function() {
   const bbd = document.getElementById('n-balance-bulk-display');
   if (bbd) bbd.textContent = '—';
 
-  // OCR strip reset
-  document.getElementById('ocr-scan-label').textContent = '📷 Scan Purchase Invoice with AI (tap to upload)';
-  document.getElementById('ocr-thumb-row').style.display = 'none';
-  const chipsWrap = document.getElementById('ocr-items-picker');
-  if (chipsWrap) chipsWrap.classList.add('hidden');
 
   // Reset ingredient rows
   const ingRows = document.getElementById('ingredient-rows');
@@ -1041,94 +1038,6 @@ function getStorageAllocation() {
   }
   return alloc;
 }
-
-// ── GEMINI AI OCR SCANNING ───────────────────────────────────────────────────
-window.onOCRFileSelected = async function(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-
-  const label = document.getElementById('ocr-scan-label');
-  const bar = document.getElementById('ocr-progress-bar');
-  const fill = document.getElementById('ocr-progress-fill');
-  const chipsPicker = document.getElementById('ocr-items-picker');
-
-  bar.style.display = 'block';
-  chipsPicker.classList.add('hidden');
-  _ocrSavedCount = 0;
-  label.textContent = '🔍 Scanning invoice with Gemini AI...';
-
-  const { ok, data, items, thumb } = await scanPurchaseInvoice(file, (pct, msg) => {
-    fill.style.width = pct + '%';
-    label.textContent = msg;
-  });
-
-  bar.style.display = 'none';
-
-  if (ok && data) {
-    // Populate header details
-    if (data.purchase_date) document.getElementById('n-purchase-date').value = data.purchase_date;
-    if (data.invoice_no)    document.getElementById('n-invoice').value = data.invoice_no;
-    if (data.challan_no)    { const el = document.getElementById('n-process-challan'); if(el) el.value = data.challan_no; }
-    if (data.supplier_name) document.getElementById('n-supplier').value = data.supplier_name;
-
-
-    currentOcrItems = items || [];
-
-    // If multiple commodities detected, show chips for user to pick
-    if (currentOcrItems.length > 1) {
-      chipsPicker.classList.remove('hidden');
-      const chipsWrap = document.getElementById('ocr-items-chips-wrap');
-      chipsWrap.innerHTML = currentOcrItems.map((it, idx) => `
-        <button type="button" class="ocr-item-chip ${idx === 0 ? 'selected' : ''} ${idx < _ocrSavedCount ? 'saved' : ''}" onclick="selectOcrItem(${idx})" id="ocr-chip-${idx}">
-          <strong>${it.raw_material_name}</strong>
-          <span>&middot; ${it.quantity_kg} kg</span>
-          ${it.supplier_batch_no ? `<span>(Lot: ${it.supplier_batch_no})</span>` : ''}
-        </button>
-      `).join('');
-      // Populate first item by default
-      selectOcrItem(0);
-    } else {
-      // Single item
-      chipsPicker.classList.add('hidden');
-      if (data.raw_material_name) document.getElementById('n-product').value = data.raw_material_name;
-      if (data.supplier_batch_no) document.getElementById('n-supplier-batch').value = data.supplier_batch_no;
-      if (data.quantity_kg) document.getElementById('n-qty').value = data.quantity_kg;
-      onProductInput(data.raw_material_name || '');
-    }
-
-    if (thumb) {
-      const thumbRow = document.getElementById('ocr-thumb-row');
-      document.getElementById('ocr-thumb').src = thumb;
-      document.getElementById('ocr-thumb-label').textContent = `${file.name} (${currentOcrItems.length} items found)`;
-      thumbRow.style.display = 'flex';
-    }
-
-    label.textContent = `✅ AI scanned: ${data.supplier_name || 'Invoice'} (${currentOcrItems.length || 1} item${currentOcrItems.length > 1 ? 's' : ''})`;
-    showToast('Invoice extracted! Verify details and proceed.');
-  } else {
-    label.textContent = '⚠️ AI scan failed — fill manually';
-    showToast('AI could not extract invoice. Please fill manually.', 3500);
-  }
-
-  input.value = '';
-};
-
-window.selectOcrItem = function(idx) {
-  const item = currentOcrItems[idx];
-  if (!item) return;
-
-  document.getElementById('n-product').value = item.raw_material_name;
-  if (item.supplier_batch_no) document.getElementById('n-supplier-batch').value = item.supplier_batch_no;
-  if (item.quantity_kg) document.getElementById('n-qty').value = item.quantity_kg;
-
-  // Highlight active chip
-  const chips = document.querySelectorAll('.ocr-item-chip');
-  chips.forEach((c, i) => c.classList.toggle('selected', i === idx));
-
-  // Auto trigger product input handlers
-  onProductInput(item.raw_material_name);
-  showToast(`Selected: ${item.raw_material_name} (${item.quantity_kg} kg)`);
-};
 
 // ── LABEL MAKER LIVE PACKAGING LOOKUP (DUKAN STOCK LOGIC) ────────────────────
 let currentLabelStats = null;
@@ -1737,8 +1646,11 @@ window.exportExcel = function() {
     // Identification
     'Sr.', 'Batch ID', 'Final Batch No.',
     // Procurement
-    'Purchase Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Supplier FSSAI',
-    'Supplier Address', 'Supplier Batch / Lot No.', 'Purchase Qty (kg)',
+    'Purchase Date', 'Invoice No.', 'Supplier Name',
+    'Supplier Batch / Lot No.', 'Purchase Qty (kg)',
+    // QC
+    'Internal RM Batch No.', 'Qty Received (kg)', 'Qty Accepted (kg)', 'Qty Rejected (kg)',
+    'QC Status', 'Inward Storage',
     // Processing
     'Processing Done', 'Processing Type',
     'Extra Ingredients & Batches', 'Total Input Weight (kg)',
@@ -1777,9 +1689,16 @@ window.exportExcel = function() {
         b.displayPurchaseDate || formatDate(b.purchaseDate),
         b.invoiceNo || '—',
         b.supplierName || '—',
-
         b.supplierBatch || 'NIL',
         b.purchaseQty || 0,
+        // QC
+        b.internalRMBatchNo || '—',
+        b.qtyReceived || b.purchaseQty || 0,
+        b.qtyAccepted || b.purchaseQty || 0,
+        b.qtyRejected || 0,
+        b.qcStatus || 'Approved',
+        b.inwardStorage || '—',
+        // Processing
         b.processingDone || 'No',
         b.processingType || '—',
         ingText,
@@ -1806,17 +1725,13 @@ window.exportExcel = function() {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [
     {wch:5},{wch:22},{wch:14},
-    {wch:14},{wch:14},{wch:24},{wch:18},{wch:18},
-    {wch:28},{wch:16},{wch:12},
-    {wch:12},{wch:12},
-    {wch:30},{wch:14},
-    {wch:14},{wch:16},
-    {wch:16},
-    {wch:16},{wch:30},
-    {wch:16},{wch:12},
-    {wch:16},{wch:12},{wch:18},
-    {wch:14},
-    {wch:22},{wch:20},{wch:12},{wch:16}
+    {wch:14},{wch:14},{wch:24},
+    {wch:18},{wch:14},
+    {wch:18},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18},
+    {wch:14},{wch:14},{wch:28},{wch:16},{wch:12},{wch:16},{wch:18},
+    {wch:20},{wch:28},{wch:16},{wch:14},
+    {wch:14},{wch:12},{wch:18},{wch:14},
+    {wch:28},{wch:20},{wch:14},{wch:18}
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Batch Traceability Register');
