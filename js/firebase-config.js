@@ -32,8 +32,11 @@ export function updateCloudBadge(connected) {
   const badge = document.getElementById('cloud-status-badge');
   const text  = document.getElementById('cloud-status-text');
   if (!badge) return;
-  badge.className = connected ? 'cloud-badge connected' : 'cloud-badge offline';
+  badge.className = 'cloud-dot ' + (connected ? 'online' : 'offline');
   if (text) text.textContent = connected ? 'Cloud Synced' : 'Local / Offline';
+  // Also update header badge
+  const hdr = document.getElementById('cloud-badge-header');
+  if (hdr) hdr.style.display = connected ? '' : 'none';
 }
 
 export function initBatchDb() {
@@ -77,9 +80,9 @@ export async function loadAllBatches() {
   const db = initBatchDb();
   if (!db) return [];
   try {
-    const q = query(collection(db, BATCH_COLLECTION), orderBy("purchaseDate", "desc"), limit(500));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(collection(db, BATCH_COLLECTION));
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return docs.sort((a, b) => ((b.date || b.purchaseDate || '')).localeCompare((a.date || a.purchaseDate || '')));
   } catch { return []; }
 }
 
