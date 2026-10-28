@@ -39,7 +39,7 @@ const PACK_SIZES = ['25g','50g','100g','200g','250g','500g','1kg','2kg','5kg','1
 
 // 4 wizard steps
 const STEPS = [
-  { title: '01 — Raw Material & Ingredient Entry', sub: 'Step 1 of 4 — Production date, finished product, and all ingredients with individual suppliers' },
+  { title: '01 — Raw Material & Ingredient Entry', sub: 'Step 1 of 4 — Date, product name, and all ingredients with individual suppliers' },
   { title: '02 — Goods Check / Quality Inspection', sub: 'Step 2 of 4 — Inspect incoming raw materials and record QC result' },
   { title: '03 — Processing & Stock Movement',      sub: 'Step 3 of 4 — Processing location, factory shortage, internal batch number, and stock destinations' },
   { title: '04 — Packaging & Final Production',     sub: 'Step 4 of 4 — Pack sizes, units packed, and packaged quantities' },
@@ -360,19 +360,18 @@ function renderStage1Detail(b) {
       <div class="sh-num">1</div>
       <div>
         <div class="sh-title">Raw Material & Ingredient Entry</div>
-        <div class="sh-sub">Production date · Finished product · All ingredients with individual suppliers</div>
+        <div class="sh-sub">Date · Product name · All ingredients with individual suppliers</div>
       </div>
       <div class="sh-badge">${ings.length > 0 ? `<span class="badge badge-green">${ings.length} ingredient${ings.length!==1?'s':''}</span>` : '<span class="badge badge-gray">Pending</span>'}</div>
     </div>
     <div class="section-body">
       <div class="detail-kv-grid" style="margin-bottom:18px;">
         <div class="dkv">
-          <div class="dkv-label">Production Date</div>
+          <div class="dkv-label">Date</div>
           <div class="dkv-value">${fmt(b.date)}</div>
         </div>
-        ${b.finishDate ? `<div class="dkv"><div class="dkv-label">Finish Date</div><div class="dkv-value">${fmt(b.finishDate)}</div></div>` : ''}
         <div class="dkv">
-          <div class="dkv-label">Finished Product</div>
+          <div class="dkv-label">Product Name</div>
           <div class="dkv-value">${esc(b.productName||'—')}</div>
         </div>
         <div class="dkv">
@@ -657,7 +656,7 @@ function renderSummary(b) {
     <div class="sum-section">
       <div class="sum-sec-title">Batch Info</div>
       <div class="sum-kv"><div class="sum-kv-label">Product</div><div class="sum-kv-value">${esc(b.productName||'—')}</div></div>
-      <div class="sum-kv"><div class="sum-kv-label">Production Date</div><div class="sum-kv-value">${fmt(b.date)}</div></div>
+      <div class="sum-kv"><div class="sum-kv-label">Date</div><div class="sum-kv-value">${fmt(b.date)}</div></div>
       ${b.internalBatchNo ? `<div class="sum-kv"><div class="sum-kv-label">Internal Batch No.</div><div class="sum-kv-value" style="color:var(--blue);font-family:monospace">${esc(b.internalBatchNo)}</div></div>` : '<div class="sum-kv"><div class="sum-kv-label">Internal Batch No.</div><div class="sum-kv-value muted">—</div></div>'}
       <div class="sum-kv"><div class="sum-kv-label">Total Ingredients</div><div class="sum-kv-value">${ings.length}</div></div>
       <div class="sum-kv"><div class="sum-kv-label">Total Raw Material</div><div class="sum-kv-value big brand">${totalWt.toFixed(2)} kg</div></div>
@@ -785,15 +784,11 @@ function wizStep1(d) {
     <div class="divider-label">General Production Details</div>
     <div class="form-grid" style="margin-bottom:18px;">
       <div class="form-group">
-        <label class="form-label">Production Date <span class="req">*</span></label>
+        <label class="form-label">Date <span class="req">*</span></label>
         <input type="date" id="f-date" value="${esc(d.date||today())}"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Finish Date</label>
-        <input type="date" id="f-finishdate" value="${esc(d.finishDate||d.date||today())}"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Finished Product Name <span class="req">*</span></label>
+        <label class="form-label">Product Name <span class="req">*</span></label>
         <input type="text" id="f-product" value="${esc(d.productName||'')}" list="dl-products"
           placeholder="e.g. Mix Masala" autocomplete="off" oninput="onProductChange()"/>
       </div>
@@ -801,7 +796,7 @@ function wizStep1(d) {
         <label class="form-label">Batch Code</label>
         <input type="text" id="f-batchcode" value="${esc(d.batchCode||'')}" placeholder="Auto-generated"/>
       </div>
-      <div class="form-group fg-full">
+      <div class="form-group">
         <label class="form-label">Shift Incharge</label>
         <input type="text" id="f-incharge" value="${esc(d.incharge||'')}" placeholder="Name of supervisor"/>
       </div>
@@ -1584,8 +1579,8 @@ function validateStep(step) {
   if (step === 0) {
     const p  = document.getElementById('f-product')?.value?.trim();
     const dt = document.getElementById('f-date')?.value;
-    if (!p)  { showToast('Finished product name is required', 'error'); return false; }
-    if (!dt) { showToast('Production date is required', 'error'); return false; }
+    if (!p)  { showToast('Product name is required', 'error'); return false; }
+    if (!dt) { showToast('Date is required', 'error'); return false; }
     const ings = collectIngredients();
     if (ings.length === 0) { showToast('Add at least one ingredient', 'error'); return false; }
     const invalid = ings.filter(i => !i.name || !i.supplier || num(i.totalQty) <= 0);
@@ -1621,8 +1616,6 @@ function collectPartialData() {
   if (prod) d.productName = prod.value.trim();
   const dt = document.getElementById('f-date');
   if (dt) d.date = dt.value;
-  const fdt = document.getElementById('f-finishdate');
-  if (fdt) d.finishDate = fdt.value;
   const bc = document.getElementById('f-batchcode');
   if (bc) d.batchCode = bc.value.trim();
   const inch = document.getElementById('f-incharge');
@@ -1784,19 +1777,19 @@ function _renderBatchDossierHtml(b, isLastPage) {
 
     <div class="sec">01 — Raw Material &amp; Ingredient Entry</div>
     <div class="kv">
-      <div class="kvp"><div class="kl">Production Date</div><div class="kv-v">${fmt(b.date)}</div></div>
-      <div class="kvp"><div class="kl">Finished Product</div><div class="kv-v">${esc(b.productName)}</div></div>
+      <div class="kvp"><div class="kl">Date</div><div class="kv-v">${fmt(b.date)}</div></div>
+      <div class="kvp"><div class="kl">Product Name</div><div class="kv-v">${esc(b.productName)}</div></div>
       <div class="kvp"><div class="kl">Batch Code</div><div class="kv-v">${esc(b.batchCode||'—')}</div></div>
       <div class="kvp"><div class="kl">Internal Batch</div><div class="kv-v">${esc(b.internalBatchNo||'—')}</div></div>
       ${b.incharge ? `<div class="kvp"><div class="kl">Incharge</div><div class="kv-v">${esc(b.incharge)}</div></div>` : ''}
     </div>
     <table>
-      <thead><tr><th>#</th><th>Ingredient</th><th>Supplier</th><th>Supplier Batch No.</th><th>Bags</th><th style="text-align:right">Net Qty (kg)</th></tr></thead>
+      <thead><tr><th>#</th><th>Supplier</th><th>Ingredient</th><th>Supplier Batch No.</th><th>Bags</th><th style="text-align:right">Net Qty (kg)</th></tr></thead>
       <tbody>
       ${ings.map((i,idx) => `<tr>
         <td>${idx+1}</td>
-        <td><strong>${esc(i.name)}</strong></td>
-        <td>${esc(i.supplier||'—')}</td>
+        <td><strong>${esc(i.supplier||'—')}</strong></td>
+        <td>${esc(i.name)}</td>
         <td>${esc(i.supplierBatch||'—')}</td>
         <td>${num(i.bags)}</td>
         <td style="text-align:right"><strong>${num(i.totalQty).toFixed(2)}</strong></td>
