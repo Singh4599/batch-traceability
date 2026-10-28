@@ -319,8 +319,8 @@ function renderStage1Detail(b) {
         <thead>
           <tr>
             <th style="width:36px;">#</th>
-            <th>Ingredient</th>
             <th>Supplier</th>
+            <th>Ingredient</th>
             <th>Supplier Batch No.</th>
             <th class="td-right">Bags</th>
             <th class="td-right">Net Qty (kg)</th>
@@ -329,8 +329,8 @@ function renderStage1Detail(b) {
         <tbody>
           ${ings.map((ing, idx) => `<tr>
             <td style="color:var(--text3);font-size:11px;">${idx+1}</td>
+            <td class="font-bold">${esc(ing.supplier||'—')}</td>
             <td class="td-main">${esc(ing.name)}</td>
-            <td>${esc(ing.supplier||'—')}</td>
             <td class="td-code">${esc(ing.supplierBatch||'—')}</td>
             <td class="td-right">${num(ing.bags)}</td>
             <td class="td-right font-bold">${num(ing.totalQty).toFixed(2)}</td>
@@ -370,6 +370,7 @@ function renderStage1Detail(b) {
           <div class="dkv-label">Production Date</div>
           <div class="dkv-value">${fmt(b.date)}</div>
         </div>
+        ${b.finishDate ? `<div class="dkv"><div class="dkv-label">Finish Date</div><div class="dkv-value">${fmt(b.finishDate)}</div></div>` : ''}
         <div class="dkv">
           <div class="dkv-label">Finished Product</div>
           <div class="dkv-value">${esc(b.productName||'—')}</div>
@@ -469,17 +470,18 @@ function renderStage3Detail(b) {
           <div class="dkv-value">${fmt(b.processingDate)}</div>
         </div>
         ${b.processingLocation === 'Factory' ? `
+        ${b.factoryName ? `<div class="dkv"><div class="dkv-label">Factory Name</div><div class="dkv-value font-bold">${esc(b.factoryName)}</div></div>` : ''}
         <div class="dkv">
           <div class="dkv-label">Sent to Factory</div>
           <div class="dkv-value">${num(b.sentToFactory).toFixed(2)} kg</div>
         </div>
         <div class="dkv">
           <div class="dkv-label">Factory Shortage</div>
-          <div class="dkv-value ${num(b.factoryShortage)>0?'red':''}">${num(b.factoryShortage).toFixed(2)} kg</div>
+          <div class="dkv-value ${num(b.factoryShortage)>0?'red':''}">${num(b.factoryShortage).toFixed(2)} kg ${b.factoryShortagePct ? `(${num(b.factoryShortagePct).toFixed(2)}%)` : ''}</div>
         </div>
         <div class="dkv">
           <div class="dkv-label">Processed Output</div>
-          <div class="dkv-value big">${num(b.sentToShop).toFixed(2)} kg</div>
+          <div class="dkv-value big green">${num(b.sentToShop).toFixed(2)} kg</div>
         </div>` : ''}
         ${b.processingNotes ? `<div class="dkv span3"><div class="dkv-label">Notes</div><div class="dkv-value muted">${esc(b.processingNotes)}</div></div>` : ''}
       </div>
@@ -738,7 +740,10 @@ function renderWizard(data) {
   const backBtn = document.getElementById('btn-back');
   const nextBtn = document.getElementById('btn-next');
   if (backBtn) backBtn.style.display = _step > 0 ? '' : 'none';
-  if (nextBtn) nextBtn.textContent   = _step === STEPS.length-1 ? '💾 Save Batch' : 'Continue →';
+  if (nextBtn) {
+    nextBtn.textContent = _step === STEPS.length-1 ? '💾 Save Batch' : 'Continue →';
+    nextBtn.classList.remove('btn-rejected-save');
+  }
 
   const body = document.getElementById('wizard-body');
   if (body) body.innerHTML = getWizardStepHTML(_step, d);
@@ -749,7 +754,14 @@ function renderWizard(data) {
   if (_step === 3) initPkgRows(d.packagingRows || []);
   if (_step === 1 && d.qcStatus) {
     const btn = document.querySelector(`.qc-btn.${d.qcStatus === 'Approved' ? 'accept' : 'reject'}`);
-    if (btn) { btn.classList.add('selected'); toggleQcReject(d.qcStatus === 'Rejected'); }
+    if (btn) {
+      btn.classList.add('selected');
+      toggleQcReject(d.qcStatus === 'Rejected');
+      if (d.qcStatus === 'Rejected' && nextBtn) {
+        nextBtn.textContent = '💾 Save as Rejected Batch';
+        nextBtn.classList.add('btn-rejected-save');
+      }
+    }
   }
   if (_step === 2 && d.processingLocation) {
     const btn = document.querySelector(`.proc-btn[data-loc="${d.processingLocation}"]`);
@@ -777,6 +789,10 @@ function wizStep1(d) {
         <input type="date" id="f-date" value="${esc(d.date||today())}"/>
       </div>
       <div class="form-group">
+        <label class="form-label">Finish Date</label>
+        <input type="date" id="f-finishdate" value="${esc(d.finishDate||d.date||today())}"/>
+      </div>
+      <div class="form-group">
         <label class="form-label">Finished Product Name <span class="req">*</span></label>
         <input type="text" id="f-product" value="${esc(d.productName||'')}" list="dl-products"
           placeholder="e.g. Mix Masala" autocomplete="off" oninput="onProductChange()"/>
@@ -785,13 +801,31 @@ function wizStep1(d) {
         <label class="form-label">Batch Code</label>
         <input type="text" id="f-batchcode" value="${esc(d.batchCode||'')}" placeholder="Auto-generated"/>
       </div>
-      <div class="form-group">
+      <div class="form-group fg-full">
         <label class="form-label">Shift Incharge</label>
         <input type="text" id="f-incharge" value="${esc(d.incharge||'')}" placeholder="Name of supervisor"/>
       </div>
     </div>
 
     <div class="divider-label">Ingredient & Raw Material Table</div>
+
+    <!-- AI Invoice Scanner (Gemini OCR) -->
+    <div class="ai-scanner-card" id="ai-scanner-box">
+      <div class="ai-scan-left">
+        <div class="ai-scan-icon">✨</div>
+        <div>
+          <div class="ai-scan-title">AI Invoice Scanner (Gemini OCR)</div>
+          <div class="ai-scan-desc" id="ai-scan-desc-text">Upload supplier invoice/bill to auto-fill Supplier Name, Item, Batch & Qty (Supports multiple scans)</div>
+        </div>
+      </div>
+      <div class="ai-scan-action">
+        <input type="file" id="f-ai-invoice-input" accept="image/*,application/pdf" style="display:none;" onchange="handleAiInvoiceUpload(event)"/>
+        <button type="button" class="btn-ai-scan" id="btn-ai-scan-trigger" onclick="triggerAiScan()">
+          <span id="ai-scan-btn-icon">📷</span> <span id="ai-scan-btn-text">Scan Invoice</span>
+        </button>
+      </div>
+    </div>
+
     <div class="info-box blue" style="margin-bottom:12px;">
       ℹ️ Each ingredient row has its own supplier. The finished product is manufactured internally — no supplier required for it.
     </div>
@@ -800,8 +834,8 @@ function wizStep1(d) {
         <thead>
           <tr>
             <th style="width:30px;">#</th>
-            <th>Ingredient Name <span style="color:var(--brand)">*</span></th>
             <th>Supplier Name <span style="color:var(--brand)">*</span></th>
+            <th>Ingredient Name <span style="color:var(--brand)">*</span></th>
             <th>Supplier Batch No. <span style="color:var(--brand)">*</span></th>
             <th class="th-num">Bags <span style="color:var(--brand)">*</span></th>
             <th class="th-num">Net Qty (kg) <span style="color:var(--brand)">*</span></th>
@@ -842,8 +876,8 @@ window.addIngRow = function(data) {
   tr.className = 'ing-row';
   tr.innerHTML = `
     <td style="color:var(--text3);font-size:11px;text-align:center;">${idx}</td>
-    <td><input type="text" class="ing-name" value="${esc(d.name||'')}" list="dl-ingredients" placeholder="Ingredient name" autocomplete="off" oninput="calcIngTotals()"/></td>
     <td><input type="text" class="ing-supplier" value="${esc(d.supplier||'')}" list="dl-suppliers" placeholder="Supplier name" autocomplete="off"/></td>
+    <td><input type="text" class="ing-name" value="${esc(d.name||'')}" list="dl-ingredients" placeholder="Ingredient name" autocomplete="off" oninput="calcIngTotals()"/></td>
     <td><input type="text" class="ing-sbatch" value="${esc(d.supplierBatch||'')}" placeholder="Supplier batch / lot no."/></td>
     <td><input type="number" class="ing-bags td-num" value="${d.bags||''}" placeholder="0" min="0" step="1" style="text-align:right;" oninput="calcIngTotals()"/></td>
     <td><input type="number" class="ing-qty td-num" value="${d.totalQty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;" oninput="calcIngTotals()"/></td>
@@ -886,6 +920,238 @@ window.calcIngTotals = function() {
   const iw = document.getElementById('it-wt');    if (iw) iw.textContent = wt.toFixed(2) + ' kg';
 };
 
+// ══════════════════════════════════════════════════════════════════════════════
+// GEMINI OCR AI INVOICE SCANNER
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _AI_GEMINI_KEYS = [
+  "QUl6YVN5Q0NzNjVZSW1lVW8yN1hwNk5pZ3NFVHZzVFZ4c0trOTRR",
+  "QVEuQWI4Uk42STFNS0RtXzl2c1Fkb2tZUEdHWUJPS1pvNDB3Mm9zbi1vR3h3RXpwX0hBYUE=",
+  "QVEuQWI4Uk42SWlSRFAtbWpXd1BaTnFvZGpkMWctUnNyYTNJLVdNSUJLcWROWFlZNTI1enc=",
+  "QVEuQWI4Uk42S1pmRmkxWXgtNE94Y0JpZTFkaGF1WjdWT251eW5nZ2tTY2FTVEcweS1FTkE=",
+  "QVEuQWI4Uk42SlJtbWtJLWk2eE4takJiQ1dRV1Qwa1BoLVNHekltUjRGcmdMQ0UwdnFKT2c="
+];
+let _aiKeyIndex = 0;
+
+function _getGeminiKey() {
+  const custom = localStorage.getItem('365_custom_gemini_key') || localStorage.getItem('gemini_api_key');
+  if (custom && custom.trim()) return custom.trim();
+  try {
+    return atob(_AI_GEMINI_KEYS[_aiKeyIndex % _AI_GEMINI_KEYS.length]);
+  } catch (e) {
+    return "";
+  }
+}
+
+function _rotateGeminiKey() {
+  _aiKeyIndex = (_aiKeyIndex + 1) % _AI_GEMINI_KEYS.length;
+  return _getGeminiKey();
+}
+
+window.triggerAiScan = function() {
+  const inp = document.getElementById('f-ai-invoice-input');
+  if (inp) {
+    inp.value = '';
+    inp.click();
+  }
+};
+
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const reader = new FileReader();
+    if (isPdf) {
+      reader.onload = e => {
+        const raw = String(e.target.result).split(',')[1] || '';
+        resolve({ rawBase64: raw, mimeType: 'application/pdf' });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const maxDim = 1600;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else { w = Math.round((w * maxDim) / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const b64 = canvas.toDataURL('image/jpeg', 0.88).split(',')[1];
+        resolve({ rawBase64: b64, mimeType: 'image/jpeg' });
+      };
+      img.onerror = () => {
+        const raw = String(e.target.result).split(',')[1] || '';
+        resolve({ rawBase64: raw, mimeType: file.type || 'image/jpeg' });
+      };
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+window.handleAiInvoiceUpload = async function(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const btn = document.getElementById('btn-ai-scan-trigger');
+  const btnText = document.getElementById('ai-scan-btn-text');
+  const btnIcon = document.getElementById('ai-scan-btn-icon');
+  const descEl = document.getElementById('ai-scan-desc-text');
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = 'Scanning...';
+  if (btnIcon) btnIcon.textContent = '⏳';
+  if (descEl) descEl.textContent = 'Processing invoice with Gemini Vision AI... Please wait.';
+
+  try {
+    const { rawBase64, mimeType } = await _fileToBase64(file);
+    if (!rawBase64) throw new Error('Could not read image file');
+
+    const prompt = `You are an AI document extractor for a spice manufacturing company.
+Analyze this invoice / tax invoice / delivery challan / purchase bill and extract all raw material items and supplier information.
+
+Return ONLY a valid JSON object in this exact format:
+{
+  "supplier_name": "Supplier or Vendor or Company Name",
+  "invoice_or_batch_no": "Invoice number or lot number or batch number",
+  "items": [
+    {
+      "ingredient_name": "Standardized spice or raw material name (e.g. Cumin Seeds, Dry Chilli, Turmeric Whole, Coriander)",
+      "supplier_batch": "Batch or lot number for this item if present",
+      "bags": 10,
+      "quantity_kg": 500.0
+    }
+  ]
+}
+
+CRITICAL EXTRACTION RULES:
+1. Extract ALL raw material items in the invoice table.
+2. If bags count is not explicitly given, estimate 1 or set to 0.
+3. quantity_kg must be numeric in KG (convert MT to KG: 1 MT = 1000 kg).
+4. Return ONLY valid JSON without markdown block.`;
+
+    let attempts = 0;
+    let data = null;
+    const maxAttempts = _AI_GEMINI_KEYS.length;
+
+    while (attempts < maxAttempts) {
+      const key = _getGeminiKey();
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: rawBase64 } }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      };
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.status === 429 || res.status === 403 || res.status === 400) {
+          _rotateGeminiKey();
+          attempts++;
+          continue;
+        }
+
+        if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+
+        const jsonRes = await res.json();
+        const rawText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error('Empty AI response');
+
+        const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        data = JSON.parse(cleanJson);
+        break;
+      } catch (err) {
+        attempts++;
+        _rotateGeminiKey();
+        if (attempts >= maxAttempts) throw err;
+      }
+    }
+
+    if (!data) throw new Error('AI could not parse invoice data');
+
+    const supplier = data.supplier_name || '';
+    const invoiceNo = data.invoice_or_batch_no || '';
+    let items = Array.isArray(data.items) && data.items.length > 0 ? data.items : [];
+
+    if (items.length === 0 && (data.ingredient_name || data.item_name)) {
+      items.push({
+        ingredient_name: data.ingredient_name || data.item_name,
+        supplier_batch: invoiceNo,
+        bags: num(data.bags) || 0,
+        quantity_kg: num(data.quantity_kg) || 0
+      });
+    }
+
+    if (items.length === 0) {
+      items.push({
+        ingredient_name: '',
+        supplier_batch: invoiceNo,
+        bags: 0,
+        quantity_kg: 0
+      });
+    }
+
+    // Populate rows in Step 1 table
+    const tbody = document.getElementById('ing-rows');
+    if (tbody) {
+      const currentRows = Array.from(tbody.querySelectorAll('.ing-row'));
+      const hasOnlyOneBlank = currentRows.length === 1 &&
+        !currentRows[0].querySelector('.ing-name')?.value?.trim() &&
+        !currentRows[0].querySelector('.ing-supplier')?.value?.trim() &&
+        num(currentRows[0].querySelector('.ing-qty')?.value) === 0;
+
+      if (hasOnlyOneBlank) {
+        tbody.innerHTML = '';
+      }
+
+      items.forEach(item => {
+        addIngRow({
+          supplier: supplier,
+          name: item.ingredient_name || '',
+          supplierBatch: item.supplier_batch || invoiceNo || '',
+          bags: num(item.bags) || 0,
+          totalQty: num(item.quantity_kg) || 0
+        });
+      });
+
+      calcIngTotals();
+    }
+
+    showToast(`✨ Extracted ${items.length} item(s) for ${supplier || 'supplier'}!`, 'success');
+  } catch (err) {
+    console.error('AI Invoice Scan Error:', err);
+    showToast(`Scan failed: ${err.message || 'Please check image and retry'}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = 'Scan Another Invoice';
+    if (btnIcon) btnIcon.textContent = '📷';
+    if (descEl) descEl.textContent = 'Upload invoice/challan to auto-fill Supplier Name, Item, Batch & Qty (Supports multiple scans)';
+    event.target.value = '';
+  }
+};
+
 window.onProductChange = function() {
   const p = document.getElementById('f-product')?.value?.trim();
   const d = document.getElementById('f-date')?.value;
@@ -898,10 +1164,11 @@ function collectIngredients() {
   const ings = [];
   rows.forEach(r => {
     const name = r.querySelector('.ing-name')?.value?.trim();
-    if (!name) return;
+    const supplier = r.querySelector('.ing-supplier')?.value?.trim();
+    if (!name && !supplier) return;
     ings.push({
-      name,
-      supplier:      r.querySelector('.ing-supplier')?.value?.trim() || '',
+      name:          name || '',
+      supplier:      supplier || '',
       supplierBatch: r.querySelector('.ing-sbatch')?.value?.trim()   || '',
       bags:          num(r.querySelector('.ing-bags')?.value),
       totalQty:      num(r.querySelector('.ing-qty')?.value),
@@ -961,6 +1228,17 @@ window.selectQC = function(val, btn) {
   const h = document.getElementById('f-qcstatus');
   if (h) h.value = val;
   toggleQcReject(val === 'Rejected');
+
+  const nextBtn = document.getElementById('btn-next');
+  if (nextBtn) {
+    if (val === 'Rejected') {
+      nextBtn.textContent = '💾 Save as Rejected Batch';
+      nextBtn.classList.add('btn-rejected-save');
+    } else {
+      nextBtn.textContent = _step === STEPS.length - 1 ? '💾 Save Batch' : 'Continue →';
+      nextBtn.classList.remove('btn-rejected-save');
+    }
+  }
 };
 function toggleQcReject(isReject) {
   const rs = document.getElementById('qc-reject-section');
@@ -987,17 +1265,12 @@ function wizStep3(d) {
       <button type="button" class="proc-btn" data-loc="Factory" onclick="selectProc('Factory',this)">
         <div class="pb-icon">🏭</div>
         <div style="font-weight:700;">FACTORY</div>
-        <div class="pb-sub">Grinding / Blending</div>
+        <div class="pb-sub">Grinding</div>
       </button>
       <button type="button" class="proc-btn" data-loc="Shop" onclick="selectProc('Shop',this)">
         <div class="pb-icon">🏪</div>
         <div style="font-weight:700;">SHOP</div>
-        <div class="pb-sub">Direct Processing</div>
-      </button>
-      <button type="button" class="proc-btn" data-loc="Cold Storage" onclick="selectProc('Cold Storage',this)">
-        <div class="pb-icon">🧊</div>
-        <div style="font-weight:700;">COLD STORAGE</div>
-        <div class="pb-sub">Cold Chain</div>
+        <div class="pb-sub">Blending</div>
       </button>
     </div>
     <input type="hidden" id="f-procloc" value="${esc(d.processingLocation||'')}"/>
@@ -1016,14 +1289,24 @@ function wizStep3(d) {
     <!-- Factory-specific fields -->
     <div id="factory-fields" style="${d.processingLocation==='Factory'?'':'display:none'}">
       <div class="divider-label">Factory Details</div>
-      <div class="form-grid-3">
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="form-group fg-full">
+          <label class="form-label">Factory Name <span class="req">*</span></label>
+          <input type="text" id="f-factoryname" value="${esc(d.factoryName||'')}" placeholder="e.g. Unit 1 Grinding Mill / Main Factory" list="dl-factories"/>
+        </div>
+      </div>
+      <div class="form-grid-4">
         <div class="form-group">
           <label class="form-label">Sent to Factory (kg)</label>
-          <input type="number" id="f-senttofactory" value="${d.sentToFactory||''}" placeholder="0.00" min="0" step="0.01" oninput="calcFactoryOut()"/>
+          <input type="number" id="f-senttofactory" value="${d.sentToFactory||''}" placeholder="0.00" min="0" step="0.01" oninput="calcFactoryOut('kg')"/>
         </div>
         <div class="form-group">
           <label class="form-label">Factory Shortage (kg)</label>
-          <input type="number" id="f-shortage" value="${d.factoryShortage||''}" placeholder="0.00" min="0" step="0.01" style="color:var(--red)" oninput="calcFactoryOut()"/>
+          <input type="number" id="f-shortage" value="${d.factoryShortage||''}" placeholder="0.00" min="0" step="0.01" style="color:var(--red)" oninput="calcFactoryOut('kg')"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shortage (%)</label>
+          <input type="number" id="f-shortage-pct" value="${d.factoryShortagePct||''}" placeholder="0.00%" min="0" max="100" step="0.01" style="color:var(--red)" oninput="calcFactoryOut('pct')"/>
         </div>
         <div class="form-group">
           <label class="form-label">Processed Output (kg)</label>
@@ -1039,7 +1322,7 @@ function wizStep3(d) {
 
     <div class="divider-label">Stock Movements</div>
     <div class="info-box blue" style="margin-bottom:10px;">
-      ℹ️ Record where the processed material is sent — Shop, Cold Storage, or other destinations. You can split across multiple destinations.
+      ℹ️ Record where the processed material is sent — Shop or Cold Storage. You can split across multiple destinations.
     </div>
     <div style="overflow-x:auto;">
       <table class="mov-table">
@@ -1073,7 +1356,7 @@ window.addMovRow = function(data) {
     <td>
       <select class="mov-dest" style="min-width:130px;">
         <option value="">— Select —</option>
-        ${['Shop','Cold Storage','Dry Store','Warehouse','Factory Store'].map(s =>
+        ${['Shop','Cold Storage'].map(s =>
           `<option ${d.destination===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </td>
@@ -1096,11 +1379,31 @@ function toggleFactoryFields(show) {
   const ff = document.getElementById('factory-fields');
   if (ff) ff.style.display = show ? '' : 'none';
 }
-window.calcFactoryOut = function() {
-  const sent  = num(document.getElementById('f-senttofactory')?.value);
-  const short = num(document.getElementById('f-shortage')?.value);
-  const out   = document.getElementById('f-senttoshop');
-  if (out) out.value = Math.max(0, sent - short).toFixed(2);
+window.calcFactoryOut = function(source) {
+  const sent = num(document.getElementById('f-senttofactory')?.value);
+  const shortageEl = document.getElementById('f-shortage');
+  const pctEl = document.getElementById('f-shortage-pct');
+  const outEl = document.getElementById('f-senttoshop');
+
+  let shortage = num(shortageEl?.value);
+  let pct = num(pctEl?.value);
+
+  if (source === 'pct') {
+    if (sent > 0) {
+      shortage = (sent * pct) / 100;
+      if (shortageEl) shortageEl.value = shortage > 0 ? shortage.toFixed(2) : '';
+    }
+  } else {
+    if (sent > 0 && shortage >= 0) {
+      pct = (shortage / sent) * 100;
+      if (pctEl) pctEl.value = pct > 0 ? pct.toFixed(2) : '';
+    }
+  }
+
+  if (outEl) {
+    const out = Math.max(0, sent - shortage);
+    outEl.value = out > 0 ? out.toFixed(2) : (sent > 0 ? sent.toFixed(2) : '');
+  }
 };
 
 // Step 4 — Packaging
@@ -1251,6 +1554,16 @@ function collectMovements() {
 // ── WIZARD NAVIGATION ─────────────────────────────────────────────────────────
 window.wizardNext = function() {
   if (!validateStep(_step)) return;
+
+  // Step 2: If rejected, block next step and save batch immediately as Rejected
+  if (_step === 1) {
+    const qc = document.getElementById('f-qcstatus')?.value;
+    if (qc === 'Rejected') {
+      saveBatchData();
+      return;
+    }
+  }
+
   if (_step === STEPS.length - 1) {
     saveBatchData();
     return;
@@ -1277,7 +1590,7 @@ function validateStep(step) {
     if (ings.length === 0) { showToast('Add at least one ingredient', 'error'); return false; }
     const invalid = ings.filter(i => !i.name || !i.supplier || num(i.totalQty) <= 0);
     if (invalid.length > 0) {
-      showToast(`Fill ingredient name, supplier, and net quantity for all rows`, 'error');
+      showToast(`Fill supplier name, ingredient name, and net quantity for all rows`, 'error');
       return false;
     }
     const bc = document.getElementById('f-batchcode');
@@ -1291,6 +1604,13 @@ function validateStep(step) {
       if (!reason) { showToast('Rejection reason is required when QC is Rejected', 'error'); return false; }
     }
   }
+  if (step === 2) {
+    const pl = document.getElementById('f-procloc')?.value;
+    if (pl === 'Factory') {
+      const fn = document.getElementById('f-factoryname')?.value?.trim();
+      if (!fn) { showToast('Factory name is required', 'error'); return false; }
+    }
+  }
   return true;
 }
 
@@ -1301,6 +1621,8 @@ function collectPartialData() {
   if (prod) d.productName = prod.value.trim();
   const dt = document.getElementById('f-date');
   if (dt) d.date = dt.value;
+  const fdt = document.getElementById('f-finishdate');
+  if (fdt) d.finishDate = fdt.value;
   const bc = document.getElementById('f-batchcode');
   if (bc) d.batchCode = bc.value.trim();
   const inch = document.getElementById('f-incharge');
@@ -1322,6 +1644,8 @@ function collectPartialData() {
   // Step 3
   const pl = document.getElementById('f-procloc');
   if (pl) d.processingLocation = pl.value;
+  const fn = document.getElementById('f-factoryname');
+  if (fn) d.factoryName = fn.value.trim();
   const ib = document.getElementById('f-intbatch');
   if (ib) d.internalBatchNo = ib.value.trim();
   const pd = document.getElementById('f-procdate');
@@ -1330,6 +1654,8 @@ function collectPartialData() {
   if (stf) d.sentToFactory = num(stf.value) || undefined;
   const sh = document.getElementById('f-shortage');
   if (sh) d.factoryShortage = num(sh.value) || undefined;
+  const shPct = document.getElementById('f-shortage-pct');
+  if (shPct) d.factoryShortagePct = num(shPct.value) || undefined;
   const sts = document.getElementById('f-senttoshop');
   if (sts) d.sentToShop = num(sts.value) || undefined;
   const pn = document.getElementById('f-procnotes');
