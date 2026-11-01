@@ -1510,7 +1510,7 @@ function wizStep4(d) {
       <td><strong>${esc(ps)}</strong></td>
       <td style="text-align:right">${g.copies}</td>
       <td style="text-align:right"><strong>${totalKg} kg</strong></td>
-      <td><button type="button" class="btn-autofill-row" onclick="autoFillPkgRow('${esc(ps)}',${g.copies})" style="font-size:11px;padding:3px 8px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;">Add →</button></td>
+      <td><button type="button" class="btn-autofill-row" onclick="autoFillPkgRow('${esc(ps)}',${g.copies},this)" style="font-size:11px;padding:3px 8px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;">Add →</button></td>
     </tr>`;
   }).join('');
 
@@ -1617,9 +1617,30 @@ window.addPkgRow = function(data) {
   if (d.totalKg) calcPkgBalance();
 };
 
-window.autoFillPkgRow = function(packSize, copies) {
-  addPkgRow({ packSize, packs: copies });
-  calcPkgBalance();
+window.autoFillPkgRow = function(packSize, copies, btn) {
+  // Check if a row with this packSize already exists — update it instead of adding
+  const existing = Array.from(document.querySelectorAll('#pkg-rows tr')).find(tr => {
+    const sel = tr.querySelector('.pkg-size');
+    return sel && sel.value === packSize;
+  });
+  if (existing) {
+    const packsEl = existing.querySelector('.pkg-packs');
+    if (packsEl) {
+      packsEl.value = copies;
+      window.calcPkgRow(packsEl);
+    }
+  } else {
+    addPkgRow({ packSize, packs: copies });
+    calcPkgBalance();
+  }
+  // Disable & update button so user sees it was added
+  const b = btn || event?.target;
+  if (b) {
+    b.textContent = '✓ Added';
+    b.disabled = true;
+    b.style.background = 'var(--green,#16a34a)';
+    b.style.cursor = 'default';
+  }
 };
 
 window.calcPkgRow = function(inp) {
