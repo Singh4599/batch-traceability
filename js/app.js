@@ -54,6 +54,7 @@ let _step      = 0;
 let _editId    = null;
 let _confirmCb = null;
 let _dukanPrints = []; // Live dukan sticker print records from label-maker Firebase
+let _wizState  = {}; // Persisted wizard data across step navigation
 
 // ── UTILITIES ─────────────────────────────────────────────────────────────────
 function uid() {
@@ -704,6 +705,7 @@ function renderSummary(b) {
 window.openNewModal = function() {
   _editId = null;
   _step   = 0;
+  _wizState = {};
   renderWizard({});
   document.getElementById('new-modal').classList.add('open');
 };
@@ -713,7 +715,8 @@ window.openEditModal = function(id) {
   if (!b) return;
   _editId = id;
   _step   = 0;
-  renderWizard(b);
+  _wizState = Object.assign({}, b);
+  renderWizard(_wizState);
   document.getElementById('new-modal').classList.add('open');
 };
 
@@ -1272,9 +1275,11 @@ function toggleQcReject(isReject) {
 
 // Step 3 — Processing
 function wizStep3(d) {
-  const ings = collectIngredients();
-  const totalWt = ings.reduce((s,i) => s + num(i.totalQty), 0) ||
-    (allBatches.find(b => b.id === _editId)?.ingredients||[]).reduce((s,i) => s+num(i.totalQty), 0);
+  // Use saved ingredients from wizard state (DOM from step 1 is gone)
+  const ings = (d.ingredients && d.ingredients.length > 0)
+    ? d.ingredients
+    : (allBatches.find(b => b.id === _editId)?.ingredients || []);
+  const totalWt = ings.reduce((s,i) => s + num(i.totalQty), 0);
 
   // Auto-generate internal batch number from product + processing date
   const procDate = d.processingDate || today();
@@ -1366,7 +1371,9 @@ function wizStep3(d) {
         <thead><tr>
           <th>Destination</th>
           <th>Date</th>
-          <th style="text-align:right;">Quantity (kg)</th>
+          <th style="text-align:right;">Bags</th>
+          <th style="text-align:right;">Kg/Bag</th>
+          <th style="text-align:right;">Total (kg)</th>
           <th>Remarks</th>
           <th style="width:36px;"></th>
         </tr></thead>
@@ -1412,18 +1419,32 @@ window.addMovRow = function(data) {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>
-      <select class="mov-dest" style="min-width:130px;">
+      <select class="mov-dest" style="min-width:120px;">
         <option value="">— Select —</option>
         ${['Shop','Cold Storage','Packaging Unit'].map(s =>
           `<option ${d.destination===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </td>
     <td><input type="date" class="mov-date" value="${esc(d.date||today())}"/></td>
-    <td><input type="number" class="mov-qty" value="${d.qty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;" oninput="calcMovBalance()"/></td>
+    <td><input type="number" class="mov-bags" value="${d.bags||''}" placeholder="0" min="0" step="1" style="text-align:right;width:60px;" oninput="calcMovRow(this)"/></td>
+    <td><input type="number" class="mov-kgbag" value="${d.kgPerBag||''}" placeholder="kg" min="0" step="0.01" style="text-align:right;width:60px;" oninput="calcMovRow(this)"/></td>
+    <td><input type="number" class="mov-qty" value="${d.qty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;width:70px;" oninput="calcMovBalance()"/></td>
     <td><input type="text" class="mov-remarks" value="${esc(d.remarks||'')}" placeholder="Optional remarks"/></td>
     <td><button class="btn-remove-row" onclick="this.closest('tr').remove();calcMovBalance()" title="Remove">×</button></td>
   `;
   tbody.appendChild(tr);
+  calcMovBalance();
+};
+
+window.calcMovRow = function(inp) {
+  const tr = inp.closest('tr');
+  if (!tr) return;
+  const bags  = num(tr.querySelector('.mov-bags')?.value);
+  const kgBag = num(tr.querySelector('.mov-kgbag')?.value);
+  const qtyEl = tr.querySelector('.mov-qty');
+  if (bags > 0 && kgBag > 0 && qtyEl) {
+    qtyEl.value = (bags * kgBag).toFixed(2);
+  }
   calcMovBalance();
 };
 
@@ -1649,6 +1670,8 @@ function collectMovements() {
     result.push({
       destination: dest,
       date:    tr.querySelector('.mov-date')?.value   || '',
+      bags:    num(tr.querySelector('.mov-bags')?.value) || undefined,
+      kgPerBag:num(tr.querySelector('.mov-kgbag')?.value) || undefined,
       qty,
       remarks: tr.querySelector('.mov-remarks')?.value?.trim() || '',
     });
@@ -1664,25 +1687,27 @@ window.wizardNext = function() {
   if (_step === 1) {
     const qc = document.getElementById('f-qcstatus')?.value;
     if (qc === 'Rejected') {
+      Object.assign(_wizState, collectPartialData());
       saveBatchData();
       return;
     }
   }
 
   if (_step === STEPS.length - 1) {
+    Object.assign(_wizState, collectPartialData());
     saveBatchData();
     return;
   }
-  const partial = collectPartialData();
+  Object.assign(_wizState, collectPartialData());
   _step++;
-  renderWizard(partial);
+  renderWizard(_wizState);
 };
 
 window.wizardBack = function() {
   if (_step === 0) return;
-  const partial = collectPartialData();
+  Object.assign(_wizState, collectPartialData());
   _step--;
-  renderWizard(partial);
+  renderWizard(_wizState);
 };
 
 function validateStep(step) {
@@ -1740,6 +1765,7 @@ function collectPartialData() {
   if (invno) d.invoiceNo = invno.value.trim();
   const ings = collectIngredients();
   if (ings.length > 0) d.ingredients = ings;
+  else if (_wizState.ingredients && _wizState.ingredients.length > 0) d.ingredients = _wizState.ingredients;
 
   // Step 2
   const qcs = document.getElementById('f-qcstatus');
@@ -1798,7 +1824,8 @@ function collectPartialData() {
 }
 
 async function saveBatchData() {
-  const data = collectPartialData();
+  // Merge persisted wizard state with current DOM data (current DOM takes priority)
+  const data = Object.assign({}, _wizState, collectPartialData());
   const ings = data.ingredients || (allBatches.find(b => b.id === _editId)?.ingredients || []);
   const totalNetWeight = ings.reduce((s,i) => s + num(i.totalQty), 0);
   const pkgRows = data.packagingRows || (allBatches.find(b => b.id === _editId)?.packagingRows || []);
