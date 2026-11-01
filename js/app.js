@@ -762,7 +762,11 @@ function renderWizard(data) {
 
   // Post-render
   if (_step === 0) initIngRows(d.ingredients || []);
-  if (_step === 2) initMovRows(d.stockMovements || []);
+  if (_step === 2) {
+    initMovRows(d.stockMovements || []);
+    // Auto-calc processed output if sent-to-factory is pre-filled
+    setTimeout(() => calcFactoryOut('pct'), 0);
+  }
   if (_step === 3) initPkgRows(d.packagingRows || []);
   if (_step === 1 && d.qcStatus) {
     const btn = document.querySelector(`.qc-btn.${d.qcStatus === 'Approved' ? 'accept' : 'reject'}`);
@@ -1272,6 +1276,15 @@ function wizStep3(d) {
   const totalWt = ings.reduce((s,i) => s + num(i.totalQty), 0) ||
     (allBatches.find(b => b.id === _editId)?.ingredients||[]).reduce((s,i) => s+num(i.totalQty), 0);
 
+  // Auto-generate internal batch number from product + processing date
+  const procDate = d.processingDate || today();
+  const autoIntBatch = d.internalBatchNo || genBatchCode(
+    document.getElementById('f-product')?.value || d.productName || '', procDate
+  );
+
+  // Sent to factory = total raw material weight (auto-filled)
+  const sentToFactoryVal = d.sentToFactory || (totalWt > 0 ? totalWt.toFixed(2) : '');
+
   return `
     <div class="info-box ${d.qcStatus==='Rejected'?'red':'green'}" style="margin-bottom:16px;">
       ${d.qcStatus==='Rejected'
@@ -1297,11 +1310,11 @@ function wizStep3(d) {
     <div class="form-grid">
       <div class="form-group">
         <label class="form-label">Internal Batch Number</label>
-        <input type="text" id="f-intbatch" value="${esc(d.internalBatchNo||'')}" placeholder="e.g. MX-2026-001"/>
+        <input type="text" id="f-intbatch" value="${esc(autoIntBatch)}" placeholder="e.g. MX-1126"/>
       </div>
       <div class="form-group">
         <label class="form-label">Processing Date</label>
-        <input type="date" id="f-procdate" value="${esc(d.processingDate||today())}"/>
+        <input type="date" id="f-procdate" value="${esc(procDate)}"/>
       </div>
     </div>
 
@@ -1311,21 +1324,21 @@ function wizStep3(d) {
       <div class="form-grid" style="margin-bottom:14px;">
         <div class="form-group fg-full">
           <label class="form-label">Factory Name <span class="req">*</span></label>
-          <input type="text" id="f-factoryname" value="${esc(d.factoryName||'')}" placeholder="e.g. Unit 1 Grinding Mill / Main Factory" list="dl-factories"/>
+          <input type="text" id="f-factoryname" value="${esc(d.factoryName||'')}" placeholder="Enter factory / mill name"/>
         </div>
       </div>
       <div class="form-grid-4">
         <div class="form-group">
           <label class="form-label">Sent to Factory (kg)</label>
-          <input type="number" id="f-senttofactory" value="${d.sentToFactory||''}" placeholder="0.00" min="0" step="0.01" oninput="calcFactoryOut('kg')"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Factory Shortage (kg)</label>
-          <input type="number" id="f-shortage" value="${d.factoryShortage||''}" placeholder="0.00" min="0" step="0.01" style="color:var(--red)" oninput="calcFactoryOut('kg')"/>
+          <input type="number" id="f-senttofactory" value="${sentToFactoryVal}" placeholder="0.00" min="0" step="0.01" oninput="calcFactoryOut('kg')"/>
         </div>
         <div class="form-group">
           <label class="form-label">Shortage (%)</label>
           <input type="number" id="f-shortage-pct" value="${d.factoryShortagePct||''}" placeholder="0.00%" min="0" max="100" step="0.01" style="color:var(--red)" oninput="calcFactoryOut('pct')"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Factory Shortage (kg)</label>
+          <input type="number" id="f-shortage" value="${d.factoryShortage||''}" placeholder="Auto" min="0" step="0.01" style="color:var(--red)" readonly/>
         </div>
         <div class="form-group">
           <label class="form-label">Processed Output (kg)</label>
@@ -1404,19 +1417,13 @@ window.calcFactoryOut = function(source) {
   const pctEl = document.getElementById('f-shortage-pct');
   const outEl = document.getElementById('f-senttoshop');
 
-  let shortage = num(shortageEl?.value);
-  let pct = num(pctEl?.value);
+  let shortage = 0;
+  const pct = num(pctEl?.value);
 
-  if (source === 'pct') {
-    if (sent > 0) {
-      shortage = (sent * pct) / 100;
-      if (shortageEl) shortageEl.value = shortage > 0 ? shortage.toFixed(2) : '';
-    }
-  } else {
-    if (sent > 0 && shortage >= 0) {
-      pct = (shortage / sent) * 100;
-      if (pctEl) pctEl.value = pct > 0 ? pct.toFixed(2) : '';
-    }
+  // Shortage % → KG auto (readonly)
+  if (sent > 0 && pct >= 0) {
+    shortage = (sent * pct) / 100;
+    if (shortageEl) shortageEl.value = shortage > 0 ? shortage.toFixed(2) : '';
   }
 
   if (outEl) {
