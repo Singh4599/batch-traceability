@@ -1,5 +1,5 @@
 // app.js — 365 Spicery Batch Production & Traceability (Manufacturing ERP Build)
-import { saveBatch as _saveBatchCloud, loadAllBatches, deleteBatchDoc } from './firebase-config.js';
+import { saveBatch as _saveBatchCloud, loadAllBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb } from './firebase-config.js';
 
 async function saveBatch(batch) {
   return _saveBatchCloud(batch.id, batch);
@@ -53,6 +53,7 @@ let activeStage = 0;
 let _step      = 0;
 let _editId    = null;
 let _confirmCb = null;
+let _dukanPrints = []; // Live dukan sticker print records from label-maker Firebase
 
 // ── UTILITIES ─────────────────────────────────────────────────────────────────
 function uid() {
@@ -128,6 +129,13 @@ async function init() {
   } catch (e) {
     console.warn('Cloud load failed, using local:', e);
   }
+
+  // Subscribe to label-maker Dukan sticker prints (live)
+  try {
+    subscribeToLabelPrints(records => {
+      _dukanPrints = records;
+    });
+  } catch (e) { console.warn('Label print subscribe failed:', e); }
 }
 
 function populateDatalists() {
@@ -321,7 +329,8 @@ function renderStage1Detail(b) {
             <th style="width:36px;">#</th>
             <th>Supplier</th>
             <th>Ingredient</th>
-            <th>Supplier Batch No.</th>
+            <th>Supplier Batch</th>
+            <th>Invoice Date</th>
             <th class="td-right">Bags</th>
             <th class="td-right">Net Qty (kg)</th>
           </tr>
@@ -332,6 +341,7 @@ function renderStage1Detail(b) {
             <td class="font-bold">${esc(ing.supplier||'—')}</td>
             <td class="td-main">${esc(ing.name)}</td>
             <td class="td-code">${esc(ing.supplierBatch||'—')}</td>
+            <td class="td-code">${esc(ing.invoiceDate||'—')}</td>
             <td class="td-right">${num(ing.bags)}</td>
             <td class="td-right font-bold">${num(ing.totalQty).toFixed(2)}</td>
           </tr>`).join('')}
@@ -423,6 +433,7 @@ function renderStage2Detail(b) {
           <div class="dkv-label">Inspection Date</div>
           <div class="dkv-value">${fmt(b.qcDate)}</div>
         </div>
+        ${b.qcRejectedQty ? `<div class="dkv"><div class="dkv-label">Rejected Qty (kg)</div><div class="dkv-value" style="color:var(--danger)">${num(b.qcRejectedQty).toFixed(2)} kg</div></div>` : ''}
         ${b.qcRemarks ? `<div class="dkv"><div class="dkv-label">Remarks / Rejection Reason</div><div class="dkv-value muted">${esc(b.qcRemarks)}</div></div>` : ''}
       </div>` :
       `<div class="empty-state" style="min-height:140px;">
@@ -556,6 +567,8 @@ function renderStage4Detail(b) {
           <div class="dkv-label">Packaging Location</div>
           <div class="dkv-value">${esc(b.packagingLocation||b.processingLocation||'—')}</div>
         </div>
+        ${b.receivingDate ? `<div class="dkv"><div class="dkv-label">Date of Receiving</div><div class="dkv-value">${fmt(b.receivingDate)}</div></div>` : ''}
+        ${b.receivedBy ? `<div class="dkv"><div class="dkv-label">Received By</div><div class="dkv-value">${esc(b.receivedBy)}</div></div>` : ''}
       </div>
 
       ${rows.length > 0 ? `
@@ -801,10 +814,6 @@ function wizStep1(d) {
         <input type="text" id="f-invoiceno" value="${esc(d.invoiceNo||'')}" placeholder="Scan or enter invoice no."/>
       </div>
       <div class="form-group">
-        <label class="form-label">Date of Invoice (Supplier)</label>
-        <input type="date" id="f-invoicedate" value="${esc(d.invoiceDate||'')}"/>
-      </div>
-      <div class="form-group">
         <label class="form-label">Shift Incharge</label>
         <input type="text" id="f-incharge" value="${esc(d.incharge||'')}" placeholder="Name of supervisor"/>
       </div>
@@ -840,6 +849,7 @@ function wizStep1(d) {
             <th>Supplier Name <span style="color:var(--brand)">*</span></th>
             <th>Ingredient Name <span style="color:var(--brand)">*</span></th>
             <th>Supplier Batch <span style="color:var(--brand)">*</span></th>
+            <th>Invoice Date</th>
             <th class="th-num">Bags <span style="color:var(--brand)">*</span></th>
             <th class="th-num">Net Qty (kg) <span style="color:var(--brand)">*</span></th>
             <th style="width:36px;"></th>
@@ -882,6 +892,7 @@ window.addIngRow = function(data) {
     <td><input type="text" class="ing-supplier" value="${esc(d.supplier||'')}" list="dl-suppliers" placeholder="Supplier name" autocomplete="off"/></td>
     <td><input type="text" class="ing-name" value="${esc(d.name||'')}" list="dl-ingredients" placeholder="Ingredient name" autocomplete="off" oninput="calcIngTotals()"/></td>
     <td><input type="text" class="ing-sbatch" value="${esc(d.supplierBatch||'')}" placeholder="Supplier batch (NIL if none)"/></td>
+    <td><input type="date" class="ing-invdate" value="${esc(d.invoiceDate||'')}"/></td>
     <td><input type="number" class="ing-bags td-num" value="${d.bags||''}" placeholder="0" min="0" step="1" style="text-align:right;" oninput="calcIngTotals()"/></td>
     <td><input type="number" class="ing-qty td-num" value="${d.totalQty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;" oninput="calcIngTotals()"/></td>
     <td><button class="btn-remove-row" onclick="removeIngRow(this)" title="Remove">×</button></td>
@@ -1101,7 +1112,7 @@ CRITICAL EXTRACTION RULES:
     if (items.length === 0 && (data.ingredient_name || data.item_name)) {
       items.push({
         ingredient_name: data.ingredient_name || data.item_name,
-        supplier_batch: invoiceNo,
+        supplier_batch: data.supplier_batch || '',
         bags: num(data.bags) || 0,
         quantity_kg: num(data.quantity_kg) || 0
       });
@@ -1110,7 +1121,7 @@ CRITICAL EXTRACTION RULES:
     if (items.length === 0) {
       items.push({
         ingredient_name: '',
-        supplier_batch: invoiceNo,
+        supplier_batch: '',
         bags: 0,
         quantity_kg: 0
       });
@@ -1137,7 +1148,8 @@ CRITICAL EXTRACTION RULES:
         addIngRow({
           supplier: supplier,
           name: item.ingredient_name || '',
-          supplierBatch: item.supplier_batch || invoiceNo || '',
+          supplierBatch: item.supplier_batch || '',
+          invoiceDate: item.invoice_date || '',
           bags: num(item.bags) || 0,
           totalQty: num(item.quantity_kg) || 0
         });
@@ -1177,6 +1189,7 @@ function collectIngredients() {
       name:          name || '',
       supplier:      supplier || '',
       supplierBatch: r.querySelector('.ing-sbatch')?.value?.trim()   || '',
+      invoiceDate:   r.querySelector('.ing-invdate')?.value           || '',
       bags:          num(r.querySelector('.ing-bags')?.value),
       totalQty:      num(r.querySelector('.ing-qty')?.value),
     });
@@ -1423,7 +1436,51 @@ window.calcFactoryOut = function(source) {
 // Step 4 — Packaging
 function wizStep4(d) {
   const processed = num(d.sentToShop) || 0;
+
+  // ── Build auto-fill panel from dukan label prints ──
+  const productName = (d.productName || '').toUpperCase().trim();
+  const matchedPrints = _dukanPrints.filter(r => {
+    const rn = (r.productName || '').toUpperCase().trim();
+    return rn && productName && (rn === productName || rn.includes(productName) || productName.includes(rn));
+  });
+
+  // Group by packSize
+  const grouped = {};
+  matchedPrints.forEach(r => {
+    const ps = r.packSize || '—';
+    if (!grouped[ps]) grouped[ps] = { copies: 0, totalWeightG: 0, records: [] };
+    grouped[ps].copies += (r.copies || 1);
+    grouped[ps].totalWeightG += (r.totalWeightG || 0);
+    grouped[ps].records.push(r);
+  });
+
+  const autoFillRows = Object.entries(grouped).map(([ps, g]) => {
+    const totalKg = (g.totalWeightG / 1000).toFixed(2);
+    return `<tr>
+      <td><strong>${esc(ps)}</strong></td>
+      <td style="text-align:right">${g.copies}</td>
+      <td style="text-align:right"><strong>${totalKg} kg</strong></td>
+      <td><button type="button" class="btn-autofill-row" onclick="autoFillPkgRow('${esc(ps)}',${g.copies})" style="font-size:11px;padding:3px 8px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;">Add →</button></td>
+    </tr>`;
+  }).join('');
+
+  const autoFillPanel = matchedPrints.length > 0 ? `
+    <div class="divider-label" style="color:var(--green);">📦 Auto-fill from Label Maker Prints</div>
+    <div class="info-box green" style="margin-bottom:10px;">
+      ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan sticker printer. Click "Add →" to auto-fill pack rows.
+    </div>
+    <div style="overflow-x:auto;margin-bottom:16px;">
+      <table class="pkg-table">
+        <thead><tr><th>Pack Size</th><th style="text-align:right">Total Copies</th><th style="text-align:right">Total Weight</th><th></th></tr></thead>
+        <tbody>${autoFillRows}</tbody>
+      </table>
+    </div>` : `
+    <div class="info-box blue" style="margin-bottom:16px;">
+      ℹ️ No Dukan sticker prints found for "<strong>${esc(productName)}</strong>" yet. Prints from label-maker will appear here automatically.
+    </div>`;
+
   return `
+    ${autoFillPanel}
     ${processed > 0 ? `<div class="info-box green" style="margin-bottom:16px;">
       ✓ Available for packaging: <strong>${processed.toFixed(2)} kg</strong> processed output
     </div>` : ''}
@@ -1516,6 +1573,11 @@ window.addPkgRow = function(data) {
   `;
   tbody.appendChild(tr);
   if (d.totalKg) calcPkgBalance();
+};
+
+window.autoFillPkgRow = function(packSize, copies) {
+  addPkgRow({ packSize, packs: copies });
+  calcPkgBalance();
 };
 
 window.calcPkgRow = function(inp) {
@@ -1649,8 +1711,6 @@ function collectPartialData() {
   if (inch) d.incharge = inch.value.trim();
   const invno = document.getElementById('f-invoiceno');
   if (invno) d.invoiceNo = invno.value.trim();
-  const invdt = document.getElementById('f-invoicedate');
-  if (invdt) d.invoiceDate = invdt.value;
   const ings = collectIngredients();
   if (ings.length > 0) d.ingredients = ings;
 
@@ -1821,17 +1881,18 @@ function _renderBatchDossierHtml(b, isLastPage) {
       ${b.incharge ? `<div class="kvp"><div class="kl">Incharge</div><div class="kv-v">${esc(b.incharge)}</div></div>` : ''}
     </div>
     <table>
-      <thead><tr><th>#</th><th>Supplier</th><th>Ingredient</th><th>Supplier Batch No.</th><th>Bags</th><th style="text-align:right">Net Qty (kg)</th></tr></thead>
+      <thead><tr><th>#</th><th>Supplier</th><th>Ingredient</th><th>Supplier Batch</th><th>Invoice Date</th><th>Bags</th><th style="text-align:right">Net Qty (kg)</th></tr></thead>
       <tbody>
       ${ings.map((i,idx) => `<tr>
         <td>${idx+1}</td>
         <td><strong>${esc(i.supplier||'—')}</strong></td>
         <td>${esc(i.name)}</td>
         <td>${esc(i.supplierBatch||'—')}</td>
+        <td>${esc(i.invoiceDate||'—')}</td>
         <td>${num(i.bags)}</td>
         <td style="text-align:right"><strong>${num(i.totalQty).toFixed(2)}</strong></td>
       </tr>`).join('')}
-      <tr class="tot"><td colspan="5"><strong>Total Net Weight</strong></td><td style="text-align:right"><strong>${totalNet.toFixed(2)} kg</strong></td></tr>
+      <tr class="tot"><td colspan="6"><strong>Total Net Weight</strong></td><td style="text-align:right"><strong>${totalNet.toFixed(2)} kg</strong></td></tr>
       </tbody>
     </table>
 
@@ -1840,6 +1901,7 @@ function _renderBatchDossierHtml(b, isLastPage) {
       <div class="kvp"><div class="kl">QC Result</div><div class="kv-v ${b.qcStatus==='Approved'?'badge-g':b.qcStatus==='Rejected'?'badge-r':''}">${esc(b.qcStatus||'—')}</div></div>
       <div class="kvp"><div class="kl">Inspector</div><div class="kv-v">${esc(b.qcInspector||'—')}</div></div>
       <div class="kvp"><div class="kl">Inspection Date</div><div class="kv-v">${fmt(b.qcDate)}</div></div>
+      ${b.qcRejectedQty ? `<div class="kvp"><div class="kl">Rejected Qty</div><div class="kv-v" style="color:var(--danger)">${num(b.qcRejectedQty).toFixed(2)} kg</div></div>` : ''}
       ${b.qcRemarks ? `<div class="kvp"><div class="kl">Remarks</div><div class="kv-v">${esc(b.qcRemarks)}</div></div>` : ''}
     </div>
 
@@ -1863,6 +1925,8 @@ function _renderBatchDossierHtml(b, isLastPage) {
       <div class="kvp"><div class="kl">MFG Date</div><div class="kv-v">${fmt(b.mfgDate)}</div></div>
       <div class="kvp"><div class="kl">Expiry Date</div><div class="kv-v">${fmt(b.expiryDate)}</div></div>
       <div class="kvp"><div class="kl">Total Packed</div><div class="kv-v">${totalPacked.toFixed(2)} kg</div></div>
+      ${b.receivingDate ? `<div class="kvp"><div class="kl">Date of Receiving</div><div class="kv-v">${fmt(b.receivingDate)}</div></div>` : ''}
+      ${b.receivedBy ? `<div class="kvp"><div class="kl">Received By</div><div class="kv-v">${esc(b.receivedBy)}</div></div>` : ''}
     </div>
     ${pkgRows.length > 0 ? `<table>
       <thead><tr><th>Pack Size</th><th style="text-align:right">Units / Packs</th><th style="text-align:right">Total (kg)</th></tr></thead>
