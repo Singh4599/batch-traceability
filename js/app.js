@@ -806,14 +806,6 @@ function wizStep1(d) {
           placeholder="e.g. Mix Masala" autocomplete="off" oninput="onProductChange()"/>
       </div>
       <div class="form-group">
-        <label class="form-label">Batch Code</label>
-        <input type="text" id="f-batchcode" value="${esc(d.batchCode||'')}" placeholder="Auto-generated"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Invoice Number</label>
-        <input type="text" id="f-invoiceno" value="${esc(d.invoiceNo||'')}" placeholder="Scan or enter invoice no."/>
-      </div>
-      <div class="form-group">
         <label class="form-label">Shift Incharge</label>
         <input type="text" id="f-incharge" value="${esc(d.incharge||'')}" placeholder="Name of supervisor"/>
       </div>
@@ -1035,10 +1027,11 @@ Return ONLY a valid JSON object in this exact format:
 {
   "supplier_name": "Supplier or Vendor or Company Name",
   "invoice_or_batch_no": "Invoice number or lot number or batch number",
+  "invoice_date": "Date of invoice in YYYY-MM-DD format (e.g. 2024-10-15)",
   "items": [
     {
       "ingredient_name": "Standardized spice or raw material name (e.g. Cumin Seeds, Dry Chilli, Turmeric Whole, Coriander)",
-      "supplier_batch": "Batch or lot number for this item if present",
+      "supplier_batch": "Batch or lot number for this item if present, else empty string",
       "bags": 10,
       "quantity_kg": 500.0
     }
@@ -1049,7 +1042,9 @@ CRITICAL EXTRACTION RULES:
 1. Extract ALL raw material items in the invoice table.
 2. If bags count is not explicitly given, estimate 1 or set to 0.
 3. quantity_kg must be numeric in KG (convert MT to KG: 1 MT = 1000 kg).
-4. Return ONLY valid JSON without markdown block.`;
+4. invoice_date: extract the invoice/bill date shown on the document. Format as YYYY-MM-DD.
+5. supplier_batch: only fill if a specific batch/lot number is printed for that item. Leave empty if not present.
+6. Return ONLY valid JSON without markdown block.`;
 
     let attempts = 0;
     let data = null;
@@ -1107,6 +1102,7 @@ CRITICAL EXTRACTION RULES:
 
     const supplier = data.supplier_name || '';
     const invoiceNo = data.invoice_or_batch_no || '';
+    const invoiceDateFromScan = data.invoice_date || '';
     let items = Array.isArray(data.items) && data.items.length > 0 ? data.items : [];
 
     if (items.length === 0 && (data.ingredient_name || data.item_name)) {
@@ -1127,10 +1123,6 @@ CRITICAL EXTRACTION RULES:
       });
     }
 
-    // Populate Invoice No field if found
-    const invNoEl = document.getElementById('f-invoiceno');
-    if (invNoEl && invoiceNo && !invNoEl.value.trim()) invNoEl.value = invoiceNo;
-
     // Populate rows in Step 1 table
     const tbody = document.getElementById('ing-rows');
     if (tbody) {
@@ -1149,7 +1141,7 @@ CRITICAL EXTRACTION RULES:
           supplier: supplier,
           name: item.ingredient_name || '',
           supplierBatch: item.supplier_batch || '',
-          invoiceDate: item.invoice_date || '',
+          invoiceDate: invoiceDateFromScan,
           bags: num(item.bags) || 0,
           totalQty: num(item.quantity_kg) || 0
         });
@@ -1678,8 +1670,7 @@ function validateStep(step) {
       return false;
     }
     const bc = document.getElementById('f-batchcode');
-    if (bc && !bc.value.trim()) bc.value = genBatchCode(p, dt);
-  }
+    if (bc && !bc.value.trim()) bc.value = genBatchCode(p, dt);  }
   if (step === 1) {
     const qc = document.getElementById('f-qcstatus')?.value;
     if (!qc) { showToast('Select QC result (Accepted or Rejected)', 'error'); return false; }
@@ -1705,8 +1696,15 @@ function collectPartialData() {
   if (prod) d.productName = prod.value.trim();
   const dt = document.getElementById('f-date');
   if (dt) d.date = dt.value;
+  // batchCode auto-generated when product selected; also generate here if missing
   const bc = document.getElementById('f-batchcode');
-  if (bc) d.batchCode = bc.value.trim();
+  if (bc && bc.value.trim()) {
+    d.batchCode = bc.value.trim();
+  } else if (!d.batchCode) {
+    const p2 = document.getElementById('f-product')?.value?.trim();
+    const dt2 = document.getElementById('f-date')?.value;
+    if (p2) d.batchCode = genBatchCode(p2, dt2);
+  }
   const inch = document.getElementById('f-incharge');
   if (inch) d.incharge = inch.value.trim();
   const invno = document.getElementById('f-invoiceno');
