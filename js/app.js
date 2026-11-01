@@ -764,8 +764,8 @@ function renderWizard(data) {
   if (_step === 0) initIngRows(d.ingredients || []);
   if (_step === 2) {
     initMovRows(d.stockMovements || []);
-    // Auto-calc processed output if sent-to-factory is pre-filled
-    setTimeout(() => calcFactoryOut('pct'), 0);
+    // Auto-calc processed output if sent-to-factory is pre-filled, then update balance
+    setTimeout(() => { calcFactoryOut('pct'); calcMovBalance(); }, 0);
   }
   if (_step === 3) initPkgRows(d.packagingRows || []);
   if (_step === 1 && d.qcStatus) {
@@ -1353,8 +1353,13 @@ function wizStep3(d) {
     </div>
 
     <div class="divider-label">Stock Movements</div>
-    <div class="info-box blue" style="margin-bottom:10px;">
-      ℹ️ Record where the processed material is sent — Shop or Cold Storage. You can split across multiple destinations.
+    <div style="display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;">
+      <span>📦 Available (Processed Output):</span>
+      <strong id="mov-available" style="color:var(--green);">— kg</strong>
+      <span style="margin-left:auto;">Sent:</span>
+      <strong id="mov-sent" style="color:var(--brand);">0.00 kg</strong>
+      <span>Remaining:</span>
+      <strong id="mov-remain" style="color:var(--red);">— kg</strong>
     </div>
     <div style="overflow-x:auto;">
       <table class="mov-table">
@@ -1377,7 +1382,28 @@ function initMovRows(movs) {
   if (!tbody) return;
   tbody.innerHTML = '';
   if (movs && movs.length > 0) movs.forEach(m => addMovRow(m));
+  calcMovBalance();
 }
+
+function calcMovBalance() {
+  const avail = num(document.getElementById('f-senttoshop')?.value);
+  const rows = document.querySelectorAll('#mov-rows .mov-qty');
+  let sent = 0;
+  rows.forEach(inp => { sent += num(inp.value); });
+  const remain = avail - sent;
+
+  const availEl = document.getElementById('mov-available');
+  const sentEl  = document.getElementById('mov-sent');
+  const remainEl= document.getElementById('mov-remain');
+
+  if (availEl) availEl.textContent = avail > 0 ? avail.toFixed(2) + ' kg' : '— kg';
+  if (sentEl)  sentEl.textContent  = sent.toFixed(2) + ' kg';
+  if (remainEl) {
+    remainEl.textContent = avail > 0 ? remain.toFixed(2) + ' kg' : '— kg';
+    remainEl.style.color = remain < 0 ? 'var(--danger,#ef4444)' : remain === 0 ? 'var(--green,#16a34a)' : 'var(--red,#ef4444)';
+  }
+}
+window.calcMovBalance = calcMovBalance;
 
 window.addMovRow = function(data) {
   const d = data || {};
@@ -1393,11 +1419,12 @@ window.addMovRow = function(data) {
       </select>
     </td>
     <td><input type="date" class="mov-date" value="${esc(d.date||today())}"/></td>
-    <td><input type="number" class="mov-qty" value="${d.qty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;"/></td>
+    <td><input type="number" class="mov-qty" value="${d.qty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;" oninput="calcMovBalance()"/></td>
     <td><input type="text" class="mov-remarks" value="${esc(d.remarks||'')}" placeholder="Optional remarks"/></td>
-    <td><button class="btn-remove-row" onclick="this.closest('tr').remove()" title="Remove">×</button></td>
+    <td><button class="btn-remove-row" onclick="this.closest('tr').remove();calcMovBalance()" title="Remove">×</button></td>
   `;
   tbody.appendChild(tr);
+  calcMovBalance();
 };
 
 window.selectProc = function(val, btn) {
@@ -1430,6 +1457,9 @@ window.calcFactoryOut = function(source) {
     const out = Math.max(0, sent - shortage);
     outEl.value = out > 0 ? out.toFixed(2) : (sent > 0 ? sent.toFixed(2) : '');
   }
+
+  // Update stock movement balance bar
+  calcMovBalance();
 };
 
 // Step 4 — Packaging
@@ -1496,14 +1526,6 @@ function wizStep4(d) {
           <option value="">— Select —</option>
           ${['Factory','Shop','Cold Storage'].map(s => `<option ${(d.packagingLocation||d.processingLocation)===s?'selected':''}>${s}</option>`).join('')}
         </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">MFG Date</label>
-        <input type="date" id="f-mfgdate" value="${esc(d.mfgDate||today())}"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Expiry Date</label>
-        <input type="date" id="f-expirydate" value="${esc(d.expiryDate||'')}"/>
       </div>
       <div class="form-group">
         <label class="form-label">Date of Receiving</label>
