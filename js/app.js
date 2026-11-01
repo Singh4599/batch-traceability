@@ -797,6 +797,14 @@ function wizStep1(d) {
         <input type="text" id="f-batchcode" value="${esc(d.batchCode||'')}" placeholder="Auto-generated"/>
       </div>
       <div class="form-group">
+        <label class="form-label">Invoice Number</label>
+        <input type="text" id="f-invoiceno" value="${esc(d.invoiceNo||'')}" placeholder="Scan or enter invoice no."/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date of Invoice (Supplier)</label>
+        <input type="date" id="f-invoicedate" value="${esc(d.invoiceDate||'')}"/>
+      </div>
+      <div class="form-group">
         <label class="form-label">Shift Incharge</label>
         <input type="text" id="f-incharge" value="${esc(d.incharge||'')}" placeholder="Name of supervisor"/>
       </div>
@@ -831,7 +839,7 @@ function wizStep1(d) {
             <th style="width:30px;">#</th>
             <th>Supplier Name <span style="color:var(--brand)">*</span></th>
             <th>Ingredient Name <span style="color:var(--brand)">*</span></th>
-            <th>Supplier Batch No. <span style="color:var(--brand)">*</span></th>
+            <th>Supplier Batch <span style="color:var(--brand)">*</span></th>
             <th class="th-num">Bags <span style="color:var(--brand)">*</span></th>
             <th class="th-num">Net Qty (kg) <span style="color:var(--brand)">*</span></th>
             <th style="width:36px;"></th>
@@ -873,7 +881,7 @@ window.addIngRow = function(data) {
     <td style="color:var(--text3);font-size:11px;text-align:center;">${idx}</td>
     <td><input type="text" class="ing-supplier" value="${esc(d.supplier||'')}" list="dl-suppliers" placeholder="Supplier name" autocomplete="off"/></td>
     <td><input type="text" class="ing-name" value="${esc(d.name||'')}" list="dl-ingredients" placeholder="Ingredient name" autocomplete="off" oninput="calcIngTotals()"/></td>
-    <td><input type="text" class="ing-sbatch" value="${esc(d.supplierBatch||'')}" placeholder="Supplier batch / lot no."/></td>
+    <td><input type="text" class="ing-sbatch" value="${esc(d.supplierBatch||'')}" placeholder="Supplier batch (NIL if none)"/></td>
     <td><input type="number" class="ing-bags td-num" value="${d.bags||''}" placeholder="0" min="0" step="1" style="text-align:right;" oninput="calcIngTotals()"/></td>
     <td><input type="number" class="ing-qty td-num" value="${d.totalQty||''}" placeholder="0.00" min="0" step="0.01" style="text-align:right;" oninput="calcIngTotals()"/></td>
     <td><button class="btn-remove-row" onclick="removeIngRow(this)" title="Remove">×</button></td>
@@ -1108,6 +1116,10 @@ CRITICAL EXTRACTION RULES:
       });
     }
 
+    // Populate Invoice No field if found
+    const invNoEl = document.getElementById('f-invoiceno');
+    if (invNoEl && invoiceNo && !invNoEl.value.trim()) invNoEl.value = invoiceNo;
+
     // Populate rows in Step 1 table
     const tbody = document.getElementById('ing-rows');
     if (tbody) {
@@ -1191,14 +1203,14 @@ function wizStep2(d) {
       <button type="button" class="qc-btn reject" onclick="selectQC('Rejected', this)">
         <div class="qb-icon">❌</div>
         <div style="font-size:15px;font-weight:800;">REJECTED</div>
-        <div class="qb-label">Materials fail quality standards</div>
+        <div class="qb-label">Full or partial rejection — enter qty below</div>
       </button>
     </div>
     <input type="hidden" id="f-qcstatus" value="${esc(d.qcStatus||'')}"/>
 
     <div class="form-grid" style="margin-top:18px;">
       <div class="form-group">
-        <label class="form-label">Inspector Name</label>
+        <label class="form-label">Inspected By</label>
         <input type="text" id="f-qcinspector" value="${esc(d.qcInspector||'')}" placeholder="Name of quality inspector"/>
       </div>
       <div class="form-group">
@@ -1208,6 +1220,10 @@ function wizStep2(d) {
       <div class="form-group fg-full" id="qc-reject-section" style="${d.qcStatus==='Rejected'?'':'display:none'}">
         <label class="form-label">Rejection Reason <span class="req">*</span></label>
         <textarea id="f-qcremarks" placeholder="Describe the reason for rejection (e.g. moisture content too high, foreign material found…)">${esc(d.qcStatus==='Rejected'?(d.qcRemarks||''):'')}</textarea>
+      </div>
+      <div class="form-group" id="qc-reject-qty-section" style="${d.qcStatus==='Rejected'?'':'display:none'}">
+        <label class="form-label">Rejected Quantity (kg) <span style="color:var(--text3);font-weight:400;font-size:11px;">— leave 0 if fully rejected</span></label>
+        <input type="number" id="f-qcrejectqty" value="${esc(d.qcRejectedQty||'')}" placeholder="0.00" min="0" step="0.01"/>
       </div>
       <div class="form-group fg-full" id="qc-notes-section" style="${d.qcStatus==='Rejected'?'display:none':''}">
         <label class="form-label">QC Notes (optional)</label>
@@ -1227,8 +1243,9 @@ window.selectQC = function(val, btn) {
   const nextBtn = document.getElementById('btn-next');
   if (nextBtn) {
     if (val === 'Rejected') {
-      nextBtn.textContent = '💾 Save as Rejected Batch';
-      nextBtn.classList.add('btn-rejected-save');
+      // Keep Continue — partial rejection can still proceed; full save happens at end
+      nextBtn.textContent = 'Continue →';
+      nextBtn.classList.remove('btn-rejected-save');
     } else {
       nextBtn.textContent = _step === STEPS.length - 1 ? '💾 Save Batch' : 'Continue →';
       nextBtn.classList.remove('btn-rejected-save');
@@ -1237,8 +1254,10 @@ window.selectQC = function(val, btn) {
 };
 function toggleQcReject(isReject) {
   const rs = document.getElementById('qc-reject-section');
+  const rq = document.getElementById('qc-reject-qty-section');
   const ns = document.getElementById('qc-notes-section');
   if (rs) rs.style.display = isReject ? '' : 'none';
+  if (rq) rq.style.display = isReject ? '' : 'none';
   if (ns) ns.style.display = isReject ? 'none' : '';
 }
 
@@ -1351,7 +1370,7 @@ window.addMovRow = function(data) {
     <td>
       <select class="mov-dest" style="min-width:130px;">
         <option value="">— Select —</option>
-        ${['Shop','Cold Storage'].map(s =>
+        ${['Shop','Cold Storage','Packaging Unit'].map(s =>
           `<option ${d.destination===s?'selected':''}>${s}</option>`).join('')}
       </select>
     </td>
@@ -1429,6 +1448,14 @@ function wizStep4(d) {
       <div class="form-group">
         <label class="form-label">Expiry Date</label>
         <input type="date" id="f-expirydate" value="${esc(d.expiryDate||'')}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date of Receiving</label>
+        <input type="date" id="f-recvdate" value="${esc(d.receivingDate||today())}"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Received By</label>
+        <input type="text" id="f-recvby" value="${esc(d.receivedBy||'')}" placeholder="Name of person receiving"/>
       </div>
     </div>
 
@@ -1620,6 +1647,10 @@ function collectPartialData() {
   if (bc) d.batchCode = bc.value.trim();
   const inch = document.getElementById('f-incharge');
   if (inch) d.incharge = inch.value.trim();
+  const invno = document.getElementById('f-invoiceno');
+  if (invno) d.invoiceNo = invno.value.trim();
+  const invdt = document.getElementById('f-invoicedate');
+  if (invdt) d.invoiceDate = invdt.value;
   const ings = collectIngredients();
   if (ings.length > 0) d.ingredients = ings;
 
@@ -1633,6 +1664,8 @@ function collectPartialData() {
   const qcr = document.getElementById('f-qcremarks');
   const qcn = document.getElementById('f-qcnotes');
   d.qcRemarks = (qcr?.value || qcn?.value || '').trim();
+  const qcrqty = document.getElementById('f-qcrejectqty');
+  if (qcrqty) d.qcRejectedQty = num(qcrqty.value) || undefined;
 
   // Step 3
   const pl = document.getElementById('f-procloc');
@@ -1669,6 +1702,10 @@ function collectPartialData() {
   if (pkgn) d.packagingNotes = pkgn.value.trim();
   const pkgRows = collectPackagingRows();
   if (pkgRows.length > 0) d.packagingRows = pkgRows;
+  const recvdt = document.getElementById('f-recvdate');
+  if (recvdt) d.receivingDate = recvdt.value;
+  const recvby = document.getElementById('f-recvby');
+  if (recvby) d.receivedBy = recvby.value.trim();
 
   return d;
 }
