@@ -6,7 +6,12 @@ async function saveBatch(batch) {
 }
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
-const LOCAL_KEY = 'spicery_batches_v3';
+const LOCAL_KEY = 'spicery_batches_v5';
+
+// Purge any stale caches from previous app builds
+['spicery_batches', 'spicery_batches_v1', 'spicery_batches_v2', 'spicery_batches_v3', 'spicery_batches_v4'].forEach(k => {
+  try { localStorage.removeItem(k); } catch {}
+});
 
 const PRODUCT_LIST = [
   'CHILLI FLAKES','GOLDEN TURMERIC POWDER','SELAM TURMERIC POWDER','TURMERIC POWDER',
@@ -194,29 +199,20 @@ async function init() {
   renderSummaryEmpty();
   if (allBatches.length > 0) openDetail(allBatches[0].id);
 
-  // Then sync from cloud
+  // Then sync from cloud (Cloud is the authoritative source of truth)
   try {
     const cloud = await loadAllBatches();
-    const cloudIds = new Set(cloud.map(b => b.id));
-    const localOnly = allBatches.filter(b => !cloudIds.has(b.id));
-
-    // Auto-sync any local batches that failed to upload to Firestore earlier
-    if (localOnly.length > 0) {
-      console.log(`[BatchSync] Uploading ${localOnly.length} local-only batches to Firestore...`);
-      localOnly.forEach(b => {
-        saveBatch(b).catch(err => console.warn('Sync failed for batch:', b.id, err));
-      });
-    }
-
-    if (cloud.length > 0) {
-      // Merge: prefer cloud, keep any local-only
-      allBatches = [...cloud, ...localOnly].sort((a,b) =>
-        (b.date||'').localeCompare(a.date||''));
+    if (cloud && cloud.length > 0) {
+      allBatches = cloud;
       saveLocal(allBatches);
       filtered = [...allBatches];
       renderList();
       if (!currentId && allBatches.length > 0) openDetail(allBatches[0].id);
-      else if (currentId) openDetail(currentId);
+      else if (currentId) {
+        const stillExists = allBatches.find(b => b.id === currentId);
+        if (stillExists) openDetail(currentId);
+        else if (allBatches.length > 0) openDetail(allBatches[0].id);
+      }
     }
   } catch (e) {
     console.warn('Cloud load failed, using local:', e);
@@ -226,10 +222,7 @@ async function init() {
   try {
     subscribeToBatches(cloud => {
       if (cloud && cloud.length > 0) {
-        const cloudIds = new Set(cloud.map(b => b.id));
-        const localOnly = allBatches.filter(b => !cloudIds.has(b.id));
-        allBatches = [...cloud, ...localOnly].sort((a,b) =>
-          (b.date||'').localeCompare(a.date||''));
+        allBatches = cloud;
         saveLocal(allBatches);
         filtered = [...allBatches];
         renderList();
