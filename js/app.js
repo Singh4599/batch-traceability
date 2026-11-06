@@ -253,6 +253,11 @@ async function init() {
           renderDetail(b);
         }
       }
+      // If modal is currently open at Step 4, live-refresh wizard view
+      const modal = document.getElementById('new-modal');
+      if (modal && modal.classList.contains('open') && _step === 3) {
+        renderWizard(_wizState);
+      }
     });
   } catch (e) { console.warn('Label print subscribe failed:', e); }
 }

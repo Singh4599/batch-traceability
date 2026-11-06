@@ -50,12 +50,7 @@ export function initBatchDb() {
 }
 
 export function initLabelDb() {
-  if (labelDb) return labelDb;
-  try {
-    const app = getApps().find(a => a.name === 'label-sync-batch') || initializeApp(labelConfig, 'label-sync-batch');
-    labelDb = getFirestore(app);
-    return labelDb;
-  } catch { return null; }
+  return initBatchDb();
 }
 
 function removeUndefined(obj) {
@@ -131,10 +126,14 @@ export function subscribeToBatches(callback) {
 const PRINTS_CUTOFF_MS = new Date('2026-11-06T00:00:00').getTime();
 
 export function subscribeToLabelPrints(callback) {
-  const db = initLabelDb();
+  const db = initBatchDb();
   if (!db) { callback([]); return () => {}; }
   try {
-    const q = collection(db, LABEL_COLLECTION);
+    const q = query(
+      collection(db, LABEL_COLLECTION),
+      orderBy('timestamp', 'desc'),
+      limit(200)
+    );
     return onSnapshot(q, snap => {
       const records = [];
       snap.forEach(docSnap => {
@@ -159,7 +158,10 @@ export function subscribeToLabelPrints(callback) {
         }
       });
       callback(records);
-    }, () => callback([]));
+    }, (err) => {
+      console.warn('[BatchFirebase] Label listener error:', err);
+      callback([]);
+    });
   } catch { callback([]); return () => {}; }
 }
 
