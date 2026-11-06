@@ -106,7 +106,7 @@ function normalizeName(n) {
 
 // ── BATCH PACKAGING & LIVE PRINTS HELPER ─────────────────────────────────────
 function getBatchPrintedStats(b) {
-  if (!b || !b.productName) return { totalKg: 0, totalUnits: 0, matchedPrints: [], rows: [] };
+  if (!b || !b.productName) return { totalKg: 0, totalUnits: 0, matchedPrints: [], allMatchedPrints: [], rows: [] };
 
   const productName = (b.productName || '').toUpperCase().trim();
   const normBatchName = normalizeName(productName);
@@ -117,9 +117,14 @@ function getBatchPrintedStats(b) {
     batchCutoffMs = Math.max(batchCutoffMs, b.createdAt);
   }
 
-  const matched = _dukanPrints.filter(r => {
+  const excludedIds = new Set(b.excludedPrintIds || []);
+
+  const allMatched = [];
+  const activeMatched = [];
+
+  _dukanPrints.forEach(r => {
     const rn = (r.productName || '').toUpperCase().trim();
-    if (!rn || !productName) return false;
+    if (!rn || !productName) return;
     const normPrintName = normalizeName(rn);
 
     const nameMatch = (
@@ -128,20 +133,25 @@ function getBatchPrintedStats(b) {
       productName.includes(rn) ||
       (normBatchName && normPrintName && (normPrintName.includes(normBatchName) || normBatchName.includes(normPrintName)))
     );
-    if (!nameMatch) return false;
+    if (!nameMatch) return;
 
-    // Must be on or after the batch date
     if (batchCutoffMs > 0 && r._recTime && r._recTime < batchCutoffMs) {
-      return false;
+      return;
     }
-    return true;
+
+    const docId = String(r.id || r._docId || r.timestamp);
+    const isExcluded = excludedIds.has(docId);
+    allMatched.push({ ...r, _docIdKey: docId, _isExcluded: isExcluded });
+    if (!isExcluded) {
+      activeMatched.push(r);
+    }
   });
 
   const grouped = {};
   let totalKg = 0;
   let totalUnits = 0;
 
-  matched.forEach(r => {
+  activeMatched.forEach(r => {
     const ps = r.packSize || '—';
     if (!grouped[ps]) grouped[ps] = { packSize: ps, packs: 0, totalKg: 0 };
 
@@ -176,11 +186,11 @@ function getBatchPrintedStats(b) {
   }));
 
   totalKg = parseFloat(totalKg.toFixed(2));
-  return { totalKg, totalUnits, matchedPrints: matched, rows };
+  return { totalKg, totalUnits, matchedPrints: activeMatched, allMatchedPrints: allMatched, rows };
 }
 
 function getBatchPackagingInfo(b) {
-  if (!b) return { rows: [], totalPacked: 0, totalUnits: 0, available: 0, remaining: 0, isAutoSynced: false, printCount: 0 };
+  if (!b) return { rows: [], totalPacked: 0, totalUnits: 0, available: 0, remaining: 0, isAutoSynced: false, printCount: 0, adjustmentKg: 0, allMatchedPrints: [] };
 
   const manualRows = b.packagingRows || [];
   const manualPacked = manualRows.reduce((s, r) => s + num(r.totalKg), 0) || num(b.packagingOutput);
@@ -191,9 +201,12 @@ function getBatchPackagingInfo(b) {
   // If no manual packaging rows were entered, automatically use live printed sticker counts
   const usePrints = manualRows.length === 0 && printStats.totalKg > 0;
 
-  const effectiveRows = manualRows.length > 0 ? manualRows : printStats.rows;
-  const totalPacked = manualRows.length > 0 ? manualPacked : printStats.totalKg;
+  const basePacked = manualRows.length > 0 ? manualPacked : printStats.totalKg;
   const totalUnits = manualRows.length > 0 ? manualUnits : printStats.totalUnits;
+
+  // Manual adjustment (e.g. -2 kg if extra prints made)
+  const adjustmentKg = num(b.adjustmentKg) || 0;
+  const totalPacked = Math.max(0, parseFloat((basePacked + adjustmentKg).toFixed(2)));
 
   const ings = b.ingredients || [];
   const totalRawWeight = ings.reduce((s, i) => s + num(i.totalQty), 0);
@@ -201,13 +214,16 @@ function getBatchPackagingInfo(b) {
   const remaining = Math.max(0, parseFloat((available - totalPacked).toFixed(2)));
 
   return {
-    rows: effectiveRows,
-    totalPacked: parseFloat(totalPacked.toFixed(2)),
+    rows: manualRows.length > 0 ? manualRows : printStats.rows,
+    basePacked: parseFloat(basePacked.toFixed(2)),
+    adjustmentKg,
+    totalPacked,
     totalUnits,
     available: parseFloat(available.toFixed(2)),
     remaining,
     isAutoSynced: usePrints,
-    printCount: printStats.matchedPrints.length
+    printCount: printStats.matchedPrints.length,
+    allMatchedPrints: printStats.allMatchedPrints || printStats.matchedPrints
   };
 }
 function showToast(msg, type = 'success') {
@@ -717,6 +733,32 @@ function renderStage4Detail(b) {
         <button type="button" onclick="resetBatchPrintsCutoff('${esc(b.id)}')" style="font-size:11px;font-weight:600;padding:4px 10px;background:#fff;border:1px solid #86efac;border-radius:6px;cursor:pointer;color:#166534;">🔄 Reset Counter to Now</button>
       </div>` : ''}
 
+      <!-- QUANTITY ADJUSTMENT / CORRECTION WIDGET -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+        <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+          <span>⚖️ Stock Correction / Galti Se Zyada Ho Gaya To Kam Karein</span>
+          <span style="font-size:12px;font-weight:700;color:${info.adjustmentKg < 0 ? 'var(--red,#dc2626)' : info.adjustmentKg > 0 ? 'var(--green,#16a34a)' : '#64748b'};">
+            ${info.adjustmentKg !== 0 ? `Active Adjustment: ${info.adjustmentKg > 0 ? '+' : ''}${info.adjustmentKg.toFixed(2)} kg` : 'No adjustment'}
+          </span>
+        </div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:10px;">
+          Agar extra print ho gaye ya sticker waste hua, yahan click karke direct minus ya plus karein:
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -1)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 1 kg</button>
+          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -2)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 2 kg</button>
+          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -5)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 5 kg</button>
+          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 1)" style="padding:6px 12px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ 1 kg</button>
+          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 5)" style="padding:6px 12px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ 5 kg</button>
+          <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+            <span style="font-size:12px;color:#64748b;">Custom (kg):</span>
+            <input type="number" step="0.1" id="adj-input-${esc(b.id)}" value="${info.adjustmentKg !== 0 ? info.adjustmentKg : ''}" placeholder="-2.5" style="width:70px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;" />
+            <button type="button" onclick="applyCustomAdjustment('${esc(b.id)}')" style="padding:5px 10px;background:#0f172a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Set</button>
+            ${info.adjustmentKg !== 0 ? `<button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0, true)" style="padding:5px 10px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;">Reset (0)</button>` : ''}
+          </div>
+        </div>
+      </div>
+
       ${rows.length > 0 || totalPacked > 0 ? `
       <div class="detail-kv-grid g2" style="margin-bottom:18px;">
         <div class="dkv">
@@ -773,13 +815,55 @@ function renderStage4Detail(b) {
         </div>
         <div class="pbb-item">
           <div class="pbb-lbl">Packed ${isAutoSynced ? '(Stickers)' : ''}</div>
-          <div class="pbb-val">${totalPacked.toFixed(2)} kg</div>
+          <div class="pbb-val">${totalPacked.toFixed(2)} kg ${info.adjustmentKg !== 0 ? `<small style="font-size:11px;color:${info.adjustmentKg < 0 ? '#dc2626' : '#16a34a'};">(${info.basePacked.toFixed(2)} ${info.adjustmentKg > 0 ? '+' : ''}${info.adjustmentKg.toFixed(2)})</small>` : ''}</div>
         </div>
         <div class="pbb-item ${remaining > 0 ? 'warn' : ''}">
           <div class="pbb-lbl">Remaining Unpacked</div>
           <div class="pbb-val">${remaining.toFixed(2)} kg</div>
         </div>
-      </div>` :
+      </div>
+
+      ${info.allMatchedPrints && info.allMatchedPrints.length > 0 ? `
+      <div style="margin-top:20px;border-top:1px dashed #e2e8f0;padding-top:16px;">
+        <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+          <span>🖨️ Live Sticker Prints Log (${info.allMatchedPrints.length} events)</span>
+          <span style="font-size:11px;color:#94a3b8;font-weight:normal;text-transform:none;">Kisi specific galti print ko hatane ke liye "✕ Remove" dabayein</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="font-size:12px;">
+            <thead><tr>
+              <th>Time</th>
+              <th>Pack Size</th>
+              <th class="td-right">Copies</th>
+              <th class="td-right">Total Weight</th>
+              <th>Status</th>
+              <th style="text-align:right;">Action</th>
+            </tr></thead>
+            <tbody>
+              ${info.allMatchedPrints.map(p => {
+                const isEx = p._isExcluded;
+                const copies = Math.max(1, parseInt(p.copies, 10) || 1);
+                let unitKg = (num(p.weightG) > 0 ? num(p.weightG)/1000 : parsePackSizeKg(p.packSize));
+                let eventKg = unitKg > 0 ? unitKg * copies : (num(p.totalWeightG)/1000 || 0);
+                const timeStr = p.time || (p._recTime ? new Date(p._recTime).toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'}) : '—');
+                const docKey = p._docIdKey || p.id || p._docId || String(p.timestamp);
+                return `<tr style="${isEx ? 'opacity:0.45;background:#f8fafc;text-decoration:line-through;' : ''}">
+                  <td style="color:#64748b;">${timeStr}</td>
+                  <td><strong>${esc(p.packSize||'—')}</strong></td>
+                  <td class="td-right">${copies}</td>
+                  <td class="td-right font-bold">${eventKg.toFixed(2)} kg</td>
+                  <td>${isEx ? '<span style="color:#dc2626;font-size:11px;font-weight:600;">✕ Excluded</span>' : '<span style="color:#16a34a;font-size:11px;font-weight:600;">✓ Counted</span>'}</td>
+                  <td style="text-align:right;">
+                    ${isEx ?
+                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', false)" style="font-size:11px;padding:3px 8px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;">↩ Restore</button>` :
+                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', true)" style="font-size:11px;padding:3px 8px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:4px;cursor:pointer;">✕ Remove</button>`}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}` :
       `<div class="empty-state" style="min-height:140px;">
         <div class="empty-icon" style="font-size:28px;">📦</div>
         <div class="empty-title">No Packaging Records Yet</div>
@@ -859,7 +943,10 @@ function renderSummary(b) {
         <div class="stock-row-value">${available > 0 ? available.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
-        <div class="stock-row-label">Packed Quantity ${isAutoSynced ? '<span style="font-size:10px;color:var(--muted);">(Stickers)</span>' : ''}</div>
+        <div class="stock-row-label">
+          Packed Quantity ${isAutoSynced ? '<span style="font-size:10px;color:var(--muted);">(Stickers)</span>' : ''}
+          ${pkgInfo.adjustmentKg !== 0 ? `<span style="font-size:10px;color:${pkgInfo.adjustmentKg < 0 ? 'var(--red,#dc2626)' : 'var(--green,#16a34a)'};display:block;">(Adj: ${pkgInfo.adjustmentKg > 0 ? '+' : ''}${pkgInfo.adjustmentKg.toFixed(2)} kg)</span>` : ''}
+        </div>
         <div class="stock-row-value" style="${totalPacked > 0 ? 'color:var(--green);font-weight:700;' : ''}">${totalPacked > 0 ? totalPacked.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
@@ -1817,6 +1904,58 @@ window.resetBatchPrintsCutoff = async function(id) {
   renderDetail(b);
   renderList();
   showToast('Live print counter reset to now!', 'success');
+};
+
+window.adjustBatchQty = async function(batchId, deltaKg, isReset = false) {
+  const b = allBatches.find(x => x.id === batchId);
+  if (!b) return;
+  if (isReset) {
+    b.adjustmentKg = 0;
+  } else {
+    b.adjustmentKg = parseFloat(((num(b.adjustmentKg) || 0) + deltaKg).toFixed(2));
+  }
+  await saveBatch(b);
+  renderSummary(b);
+  renderDetail(b);
+  renderList();
+  showToast(isReset ? 'Adjustment reset to 0 kg' : `Adjusted by ${deltaKg > 0 ? '+' : ''}${deltaKg} kg`, 'success');
+};
+
+window.applyCustomAdjustment = async function(batchId) {
+  const inp = document.getElementById(`adj-input-${batchId}`);
+  if (!inp) return;
+  const val = parseFloat(inp.value);
+  if (isNaN(val)) {
+    showToast('Valid number enter karein', 'error');
+    return;
+  }
+  const b = allBatches.find(x => x.id === batchId);
+  if (!b) return;
+  b.adjustmentKg = parseFloat(val.toFixed(2));
+  await saveBatch(b);
+  renderSummary(b);
+  renderDetail(b);
+  renderList();
+  showToast(`Adjustment set to ${val > 0 ? '+' : ''}${val.toFixed(2)} kg`, 'success');
+};
+
+window.toggleExcludePrint = async function(batchId, printId, exclude) {
+  const b = allBatches.find(x => x.id === batchId);
+  if (!b) return;
+  if (!Array.isArray(b.excludedPrintIds)) b.excludedPrintIds = [];
+  const sId = String(printId);
+  if (exclude) {
+    if (!b.excludedPrintIds.includes(sId)) {
+      b.excludedPrintIds.push(sId);
+    }
+  } else {
+    b.excludedPrintIds = b.excludedPrintIds.filter(id => id !== sId);
+  }
+  await saveBatch(b);
+  renderSummary(b);
+  renderDetail(b);
+  renderList();
+  showToast(exclude ? 'Print excluded from batch' : 'Print restored to batch', 'success');
 };
 
 window.calcPkgRow = function(inp) {
