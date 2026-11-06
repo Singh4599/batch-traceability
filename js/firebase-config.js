@@ -50,7 +50,34 @@ export function initBatchDb() {
 }
 
 export function initLabelDb() {
-  return initBatchDb();
+  if (labelDb) return labelDb;
+  try {
+    const app = getApps().find(a => a.name === 'label-sync-batch') || initializeApp(labelConfig, 'label-sync-batch');
+    labelDb = getFirestore(app);
+    return labelDb;
+  } catch (err) {
+    console.warn('[BatchFirebase] initLabelDb error:', err);
+    return null;
+  }
+}
+
+export function parseDateMs(val) {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (!s) return 0;
+  if (/^\d{12,14}$/.test(s)) return Number(s);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s.slice(0, 10) + 'T00:00:00');
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  if (/^\d{2}-\d{2}-\d{4}/.test(s)) {
+    const [dd, mm, yyyy] = s.slice(0, 10).split('-');
+    const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+  const parsed = Date.parse(s);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 function removeUndefined(obj) {
@@ -126,43 +153,77 @@ export function subscribeToBatches(callback) {
 const PRINTS_CUTOFF_MS = new Date('2026-11-06T00:00:00').getTime();
 
 export function subscribeToLabelPrints(callback) {
-  const db = initBatchDb();
-  if (!db) { callback([]); return () => {}; }
-  try {
-    const q = query(
-      collection(db, LABEL_COLLECTION),
-      orderBy('timestamp', 'desc'),
-      limit(200)
-    );
-    return onSnapshot(q, snap => {
-      const records = [];
-      snap.forEach(docSnap => {
-        const data = docSnap.data();
-        // FILTER 1: Match Dukan Bai + 365 Spicery (db) sticker records
-        const isValidSticker = (data.stickerType === "dukan") || (data.stickerLabel === "Dukan Bai")
-          || (data.stickerType === "db") || (data.stickerLabel === "365 Spicery");
-        const isNotFront = data.labelSide !== "front" && data.packSize !== "FRONT";
+  const lDb = initLabelDb();
+  const bDb = initBatchDb();
 
-        // FILTER 2: Only prints from today (06 Nov 2026) onwards
-        let recTime = Number(data.timestamp) || 0;
-        if (!recTime && data.date && data.date.includes('-')) {
-          const parts = data.date.split('-');
-          if (parts.length === 3) {
-            recTime = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`).getTime();
-          }
-        }
-        const isFromTodayOnwards = recTime >= PRINTS_CUTOFF_MS;
+  const labelMap = new Map();
+  const batchMap = new Map();
 
-        if (isValidSticker && isNotFront && isFromTodayOnwards) {
-          records.push({ id: docSnap.id, ...data, _recTime: recTime });
-        }
+  function notify() {
+    const combined = new Map();
+    // 1. Add any prints from batch DB
+    batchMap.forEach((v, k) => combined.set(k, v));
+    // 2. Add / overwrite with prints from lablerecords DB (primary)
+    labelMap.forEach((v, k) => combined.set(k, v));
+
+    const records = Array.from(combined.values());
+    records.sort((a, b) => (b._recTime || 0) - (a._recTime || 0));
+    callback(records);
+  }
+
+  function processDoc(docSnap, targetMap) {
+    const data = docSnap.data();
+    // Reject front labels — only back labels represent packaged finished goods
+    const isFront = (data.labelSide === "front") || (data.packSize === "FRONT");
+    if (isFront) return;
+
+    // Check cutoff (today onwards: 06 Nov 2026)
+    let recTime = Number(data.timestamp) || 0;
+    if (!recTime && data.date) {
+      recTime = parseDateMs(data.date);
+    }
+    if (recTime && recTime < PRINTS_CUTOFF_MS) {
+      return;
+    }
+
+    const docId = docSnap.id || String(data._docId || data.timestamp || Math.random());
+    targetMap.set(docId, { id: docId, ...data, _recTime: recTime });
+  }
+
+  const unsubs = [];
+
+  // Primary: listen to lablerecords-3f897
+  if (lDb) {
+    try {
+      const u1 = onSnapshot(collection(lDb, LABEL_COLLECTION), snap => {
+        labelMap.clear();
+        snap.forEach(d => processDoc(d, labelMap));
+        console.log(`[BatchFirebase] Received ${labelMap.size} valid prints from lablerecords-3f897`);
+        notify();
+      }, err => {
+        console.warn('[BatchFirebase] lablerecords-3f897 listener error:', err);
       });
-      callback(records);
-    }, (err) => {
-      console.warn('[BatchFirebase] Label listener error:', err);
-      callback([]);
-    });
-  } catch { callback([]); return () => {}; }
+      unsubs.push(u1);
+    } catch (e) { console.warn('Label primary listener setup error:', e); }
+  }
+
+  // Dual/Fallback: listen to batch-f54b6 labelRecords
+  if (bDb) {
+    try {
+      const u2 = onSnapshot(collection(bDb, LABEL_COLLECTION), snap => {
+        batchMap.clear();
+        snap.forEach(d => processDoc(d, batchMap));
+        notify();
+      }, err => {
+        console.warn('[BatchFirebase] batch-f54b6 labelRecords listener error:', err);
+      });
+      unsubs.push(u2);
+    } catch (e) { console.warn('Label secondary listener setup error:', e); }
+  }
+
+  return () => {
+    unsubs.forEach(u => { try { u(); } catch {} });
+  };
 }
 
 try { initBatchDb(); initLabelDb(); } catch (e) {}

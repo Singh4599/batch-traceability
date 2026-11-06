@@ -1,5 +1,5 @@
 // app.js — 365 Spicery Batch Production & Traceability (Manufacturing ERP Build)
-import { saveBatch as _saveBatchCloud, loadAllBatches, subscribeToBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb } from './firebase-config.js';
+import { saveBatch as _saveBatchCloud, loadAllBatches, subscribeToBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb, parseDateMs } from './firebase-config.js';
 
 async function saveBatch(batch) {
   return _saveBatchCloud(batch.id, batch);
@@ -87,10 +87,21 @@ function genBatchCode(product, date) {
 }
 function parsePackSizeKg(s) {
   if (!s) return 0;
-  s = s.toLowerCase();
-  if (s.includes('kg')) return num(s.replace('kg',''));
-  if (s.includes('g'))  return num(s.replace('g','')) / 1000;
-  return 0;
+  s = String(s).toLowerCase().trim();
+  if (s.includes('kg')) {
+    const val = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return isNaN(val) ? 0 : val;
+  }
+  if (s.includes('g') || s.includes('gm')) {
+    const val = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return isNaN(val) ? 0 : val / 1000;
+  }
+  const val = parseFloat(s.replace(/[^0-9.]/g, ''));
+  return isNaN(val) ? 0 : val;
+}
+
+function normalizeName(n) {
+  return String(n || '').toUpperCase().replace(/[()_\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 // ── BATCH PACKAGING & LIVE PRINTS HELPER ─────────────────────────────────────
@@ -98,17 +109,25 @@ function getBatchPrintedStats(b) {
   if (!b || !b.productName) return { totalKg: 0, totalUnits: 0, matchedPrints: [], rows: [] };
 
   const productName = (b.productName || '').toUpperCase().trim();
+  const normBatchName = normalizeName(productName);
 
   // Filter prints on or after the batch date
   let batchCutoffMs = 0;
   if (b.date) {
-    batchCutoffMs = new Date(b.date + 'T00:00:00').getTime();
+    batchCutoffMs = parseDateMs(b.date);
   }
 
   const matched = _dukanPrints.filter(r => {
     const rn = (r.productName || '').toUpperCase().trim();
     if (!rn || !productName) return false;
-    const nameMatch = (rn === productName || rn.includes(productName) || productName.includes(rn));
+    const normPrintName = normalizeName(rn);
+
+    const nameMatch = (
+      rn === productName ||
+      rn.includes(productName) ||
+      productName.includes(rn) ||
+      (normBatchName && normPrintName && (normPrintName.includes(normBatchName) || normBatchName.includes(normPrintName)))
+    );
     if (!nameMatch) return false;
 
     // Must be on or after the batch date
@@ -119,17 +138,34 @@ function getBatchPrintedStats(b) {
   });
 
   const grouped = {};
-  let totalWeightG = 0;
+  let totalKg = 0;
   let totalUnits = 0;
 
   matched.forEach(r => {
     const ps = r.packSize || '—';
     if (!grouped[ps]) grouped[ps] = { packSize: ps, packs: 0, totalKg: 0 };
-    const copies = num(r.copies) || 1;
-    const kg = (num(r.totalWeightG) / 1000) || ((num(r.weightG) * copies) / 1000) || 0;
+
+    const copies = Math.max(1, parseInt(r.copies, 10) || 1);
+
+    // Determine the unit weight in kg (single pack)
+    let unitKg = 0;
+    if (num(r.weightG) > 0) {
+      unitKg = num(r.weightG) / 1000;
+    } else if (r.packSize) {
+      unitKg = parsePackSizeKg(r.packSize);
+    }
+
+    // Total weight for this print event = unitKg * copies
+    let eventKg = 0;
+    if (unitKg > 0) {
+      eventKg = unitKg * copies;
+    } else if (num(r.totalWeightG) > 0) {
+      eventKg = num(r.totalWeightG) / 1000;
+    }
+
     grouped[ps].packs += copies;
-    grouped[ps].totalKg += kg;
-    totalWeightG += (num(r.totalWeightG) || (num(r.weightG) * copies) || 0);
+    grouped[ps].totalKg += eventKg;
+    totalKg += eventKg;
     totalUnits += copies;
   });
 
@@ -139,7 +175,7 @@ function getBatchPrintedStats(b) {
     totalKg: parseFloat(g.totalKg.toFixed(2))
   }));
 
-  const totalKg = parseFloat((totalWeightG / 1000).toFixed(2));
+  totalKg = parseFloat(totalKg.toFixed(2));
   return { totalKg, totalUnits, matchedPrints: matched, rows };
 }
 
@@ -162,13 +198,13 @@ function getBatchPackagingInfo(b) {
   const ings = b.ingredients || [];
   const totalRawWeight = ings.reduce((s, i) => s + num(i.totalQty), 0);
   const available = num(b.sentToShop) || num(b.packagingOutput) || num(b.totalNetWeight) || totalRawWeight || 0;
-  const remaining = Math.max(0, available - totalPacked);
+  const remaining = Math.max(0, parseFloat((available - totalPacked).toFixed(2)));
 
   return {
     rows: effectiveRows,
-    totalPacked,
+    totalPacked: parseFloat(totalPacked.toFixed(2)),
     totalUnits,
-    available,
+    available: parseFloat(available.toFixed(2)),
     remaining,
     isAutoSynced: usePrints,
     printCount: printStats.matchedPrints.length
@@ -1617,30 +1653,17 @@ window.calcFactoryOut = function(source) {
 function wizStep4(d) {
   const processed = num(d.sentToShop) || 0;
 
-  // ── Build auto-fill panel from dukan label prints ──
+  // ── Build auto-fill panel from label prints ──
   const productName = (d.productName || '').toUpperCase().trim();
-  const matchedPrints = _dukanPrints.filter(r => {
-    const rn = (r.productName || '').toUpperCase().trim();
-    return rn && productName && (rn === productName || rn.includes(productName) || productName.includes(rn));
-  });
+  const printStats = getBatchPrintedStats(d);
+  const matchedPrints = printStats.matchedPrints;
 
-  // Group by packSize
-  const grouped = {};
-  matchedPrints.forEach(r => {
-    const ps = r.packSize || '—';
-    if (!grouped[ps]) grouped[ps] = { copies: 0, totalWeightG: 0, records: [] };
-    grouped[ps].copies += (r.copies || 1);
-    grouped[ps].totalWeightG += (r.totalWeightG || 0);
-    grouped[ps].records.push(r);
-  });
-
-  const autoFillRows = Object.entries(grouped).map(([ps, g]) => {
-    const totalKg = (g.totalWeightG / 1000).toFixed(2);
+  const autoFillRows = printStats.rows.map(g => {
     return `<tr>
-      <td><strong>${esc(ps)}</strong></td>
-      <td style="text-align:right">${g.copies}</td>
-      <td style="text-align:right"><strong>${totalKg} kg</strong></td>
-      <td><button type="button" class="btn-autofill-row" onclick="autoFillPkgRow('${esc(ps)}',${g.copies},this)" style="font-size:11px;padding:3px 8px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;">Add →</button></td>
+      <td><strong>${esc(g.packSize)}</strong></td>
+      <td style="text-align:right">${g.packs}</td>
+      <td style="text-align:right"><strong>${g.totalKg.toFixed(2)} kg</strong></td>
+      <td><button type="button" class="btn-autofill-row" onclick="autoFillPkgRow('${esc(g.packSize)}',${g.packs},this)" style="font-size:11px;padding:3px 8px;background:var(--brand);color:#fff;border:none;border-radius:4px;cursor:pointer;">Add →</button></td>
     </tr>`;
   }).join('');
 
@@ -1648,7 +1671,7 @@ function wizStep4(d) {
     <div class="divider-label" style="color:var(--green);">📦 Auto-fill from Label Maker Prints</div>
     <div class="info-box green" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <div>
-        ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan / 365 Spicery sticker printer. Live auto-deduction is active!
+        ✅ Found <strong>${matchedPrints.length} print record(s)</strong> (${printStats.totalUnits} copies, <strong>${printStats.totalKg.toFixed(2)} kg</strong>) for <strong>${esc(productName)}</strong> from label printer. Live auto-deduction is active!
       </div>
       <button type="button" onclick="autoFillAllPkgRows()" style="font-size:12px;font-weight:600;padding:5px 12px;background:var(--green,#16a34a);color:#fff;border:none;border-radius:6px;cursor:pointer;">Add All →</button>
     </div>
@@ -1659,7 +1682,7 @@ function wizStep4(d) {
       </table>
     </div>` : `
     <div class="info-box blue" style="margin-bottom:16px;">
-      ℹ️ No sticker prints found for "<strong>${esc(productName)}</strong>" yet. Prints from label-maker (Dukan or 365 Spicery) will appear here automatically.
+      ℹ️ No sticker prints found for "<strong>${esc(productName)}</strong>" yet. Prints from label-maker will appear here automatically.
     </div>`;
 
   return `
