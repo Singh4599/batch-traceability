@@ -127,6 +127,9 @@ export function subscribeToBatches(callback) {
   }
 }
 
+// Cutoff: only sync label prints from today (06 Nov 2026) onwards
+const PRINTS_CUTOFF_MS = new Date('2026-11-06T00:00:00').getTime();
+
 export function subscribeToLabelPrints(callback) {
   const db = initLabelDb();
   if (!db) { callback([]); return () => {}; }
@@ -136,12 +139,23 @@ export function subscribeToLabelPrints(callback) {
       const records = [];
       snap.forEach(docSnap => {
         const data = docSnap.data();
-        // FILTER: Match Dukan Bai + 365 Spicery (db) sticker records
+        // FILTER 1: Match Dukan Bai + 365 Spicery (db) sticker records
         const isValidSticker = (data.stickerType === "dukan") || (data.stickerLabel === "Dukan Bai")
           || (data.stickerType === "db") || (data.stickerLabel === "365 Spicery");
         const isNotFront = data.labelSide !== "front" && data.packSize !== "FRONT";
-        if (isValidSticker && isNotFront) {
-          records.push({ id: docSnap.id, ...data });
+
+        // FILTER 2: Only prints from today (06 Nov 2026) onwards
+        let recTime = Number(data.timestamp) || 0;
+        if (!recTime && data.date && data.date.includes('-')) {
+          const parts = data.date.split('-');
+          if (parts.length === 3) {
+            recTime = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`).getTime();
+          }
+        }
+        const isFromTodayOnwards = recTime >= PRINTS_CUTOFF_MS;
+
+        if (isValidSticker && isNotFront && isFromTodayOnwards) {
+          records.push({ id: docSnap.id, ...data, _recTime: recTime });
         }
       });
       callback(records);

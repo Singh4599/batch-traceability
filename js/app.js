@@ -93,10 +93,24 @@ function getBatchPrintedStats(b) {
   if (!b || !b.productName) return { totalKg: 0, totalUnits: 0, matchedPrints: [], rows: [] };
 
   const productName = (b.productName || '').toUpperCase().trim();
+
+  // Filter prints on or after the batch date
+  let batchCutoffMs = 0;
+  if (b.date) {
+    batchCutoffMs = new Date(b.date + 'T00:00:00').getTime();
+  }
+
   const matched = _dukanPrints.filter(r => {
     const rn = (r.productName || '').toUpperCase().trim();
     if (!rn || !productName) return false;
-    return rn === productName || rn.includes(productName) || productName.includes(rn);
+    const nameMatch = (rn === productName || rn.includes(productName) || productName.includes(rn));
+    if (!nameMatch) return false;
+
+    // Must be on or after the batch date
+    if (batchCutoffMs > 0 && r._recTime && r._recTime < batchCutoffMs) {
+      return false;
+    }
+    return true;
   });
 
   const grouped = {};
