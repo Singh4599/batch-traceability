@@ -733,29 +733,56 @@ function renderStage4Detail(b) {
         <button type="button" onclick="resetBatchPrintsCutoff('${esc(b.id)}')" style="font-size:11px;font-weight:600;padding:4px 10px;background:#fff;border:1px solid #86efac;border-radius:6px;cursor:pointer;color:#166534;">🔄 Reset Counter to Now</button>
       </div>` : ''}
 
-      <!-- QUANTITY ADJUSTMENT / CORRECTION WIDGET -->
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:16px;">
-        <div style="font-weight:700;font-size:13px;color:#0f172a;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-          <span>⚖️ Stock Correction / Galti Se Zyada Ho Gaya To Kam Karein</span>
-          <span style="font-size:12px;font-weight:700;color:${info.adjustmentKg < 0 ? 'var(--red,#dc2626)' : info.adjustmentKg > 0 ? 'var(--green,#16a34a)' : '#64748b'};">
-            ${info.adjustmentKg !== 0 ? `Active Adjustment: ${info.adjustmentKg > 0 ? '+' : ''}${info.adjustmentKg.toFixed(2)} kg` : 'No adjustment'}
-          </span>
-        </div>
-        <div style="font-size:12px;color:#64748b;margin-bottom:10px;">
-          Agar extra print ho gaye ya sticker waste hua, yahan click karke direct minus ya plus karein:
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -1)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 1 kg</button>
-          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -2)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 2 kg</button>
-          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -5)" style="padding:6px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">- 5 kg</button>
-          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 1)" style="padding:6px 12px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ 1 kg</button>
-          <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 5)" style="padding:6px 12px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ 5 kg</button>
-          <div style="display:flex;align-items:center;gap:4px;margin-left:auto;">
-            <span style="font-size:12px;color:#64748b;">Custom (kg):</span>
-            <input type="number" step="0.1" id="adj-input-${esc(b.id)}" value="${info.adjustmentKg !== 0 ? info.adjustmentKg : ''}" placeholder="-2.5" style="width:70px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;" />
-            <button type="button" onclick="applyCustomAdjustment('${esc(b.id)}')" style="padding:5px 10px;background:#0f172a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">Set</button>
-            ${info.adjustmentKg !== 0 ? `<button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0, true)" style="padding:5px 10px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;">Reset (0)</button>` : ''}
+      <!-- QUANTITY ADJUSTMENT CARD -->
+      <div class="adj-card" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:#0f172a;display:flex;align-items:center;gap:6px;">
+              <span>⚖️ Stock & Print Adjustment</span>
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">
+              Deduct or add quantity for accidental prints, damaged stickers, or sampling.
+            </div>
           </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${info.adjustmentKg !== 0 ? `
+              <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${info.adjustmentKg < 0 ? '#fee2e2' : '#dcfce7'};color:${info.adjustmentKg < 0 ? '#991b1b' : '#166534'};border:1px solid ${info.adjustmentKg < 0 ? '#fecaca' : '#bbf7d0'};">
+                Net Adjustment: ${info.adjustmentKg > 0 ? '+' : ''}${info.adjustmentKg.toFixed(2)} kg
+              </span>
+              <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0, true)" style="font-size:11px;font-weight:600;padding:3px 10px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;color:#475569;">Reset to 0</button>
+            ` : '<span style="font-size:11px;color:#94a3b8;font-weight:500;">No active adjustment</span>'}
+          </div>
+        </div>
+
+        <!-- ROW 1: LESS / DEDUCT (-) -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0;">
+          <span style="font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.04em;min-width:65px;">Less (-):</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -0.1)" class="pill-btn pill-less" style="padding:4px 11px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:14px;cursor:pointer;">- 100g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -0.2)" class="pill-btn pill-less" style="padding:4px 11px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:14px;cursor:pointer;">- 200g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -0.25)" class="pill-btn pill-less" style="padding:4px 11px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:14px;cursor:pointer;">- 250g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -0.5)" class="pill-btn pill-less" style="padding:4px 11px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:14px;cursor:pointer;">- 500g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', -1.0)" class="pill-btn pill-less" style="padding:4px 11px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:14px;cursor:pointer;">- 1 kg</button>
+          </div>
+        </div>
+
+        <!-- ROW 2: ADD (+) -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <span style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.04em;min-width:65px;">Add (+):</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0.1)" class="pill-btn pill-add" style="padding:4px 11px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:14px;cursor:pointer;">+ 100g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0.2)" class="pill-btn pill-add" style="padding:4px 11px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:14px;cursor:pointer;">+ 200g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0.25)" class="pill-btn pill-add" style="padding:4px 11px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:14px;cursor:pointer;">+ 250g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 0.5)" class="pill-btn pill-add" style="padding:4px 11px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:14px;cursor:pointer;">+ 500g</button>
+            <button type="button" onclick="adjustBatchQty('${esc(b.id)}', 1.0)" class="pill-btn pill-add" style="padding:4px 11px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:14px;cursor:pointer;">+ 1 kg</button>
+          </div>
+        </div>
+
+        <!-- ROW 3: CUSTOM ADJUSTMENT INPUT -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;width:fit-content;">
+          <span style="font-size:11px;font-weight:600;color:#64748b;">Custom (kg):</span>
+          <input type="number" step="0.05" id="adj-input-${esc(b.id)}" value="${info.adjustmentKg !== 0 ? info.adjustmentKg : ''}" placeholder="e.g. -1.5" style="width:75px;height:26px;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;font-weight:600;" />
+          <button type="button" onclick="applyCustomAdjustment('${esc(b.id)}')" style="height:26px;padding:0 10px;background:#0f172a;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">Set</button>
         </div>
       </div>
 
@@ -815,7 +842,7 @@ function renderStage4Detail(b) {
         </div>
         <div class="pbb-item">
           <div class="pbb-lbl">Packed ${isAutoSynced ? '(Stickers)' : ''}</div>
-          <div class="pbb-val">${totalPacked.toFixed(2)} kg ${info.adjustmentKg !== 0 ? `<small style="font-size:11px;color:${info.adjustmentKg < 0 ? '#dc2626' : '#16a34a'};">(${info.basePacked.toFixed(2)} ${info.adjustmentKg > 0 ? '+' : ''}${info.adjustmentKg.toFixed(2)})</small>` : ''}</div>
+          <div class="pbb-val">${totalPacked.toFixed(2)} kg</div>
         </div>
         <div class="pbb-item ${remaining > 0 ? 'warn' : ''}">
           <div class="pbb-lbl">Remaining Unpacked</div>
@@ -827,7 +854,7 @@ function renderStage4Detail(b) {
       <div style="margin-top:20px;border-top:1px dashed #e2e8f0;padding-top:16px;">
         <div style="font-weight:700;font-size:12px;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
           <span>🖨️ Live Sticker Prints Log (${info.allMatchedPrints.length} events)</span>
-          <span style="font-size:11px;color:#94a3b8;font-weight:normal;text-transform:none;">Kisi specific galti print ko hatane ke liye "✕ Remove" dabayein</span>
+          <span style="font-size:11px;color:#94a3b8;font-weight:normal;text-transform:none;">Use "Exclude" to remove individual accidental prints from batch total</span>
         </div>
         <div style="overflow-x:auto;">
           <table class="data-table" style="font-size:12px;">
@@ -849,14 +876,14 @@ function renderStage4Detail(b) {
                 const docKey = p._docIdKey || p.id || p._docId || String(p.timestamp);
                 return `<tr style="${isEx ? 'opacity:0.45;background:#f8fafc;text-decoration:line-through;' : ''}">
                   <td style="color:#64748b;">${timeStr}</td>
-                  <td><strong>${esc(p.packSize||'—')}</strong></td>
+                  <td><span class="badge badge-gray font-bold">${esc(p.packSize||'—')}</span></td>
                   <td class="td-right">${copies}</td>
                   <td class="td-right font-bold">${eventKg.toFixed(2)} kg</td>
-                  <td>${isEx ? '<span style="color:#dc2626;font-size:11px;font-weight:600;">✕ Excluded</span>' : '<span style="color:#16a34a;font-size:11px;font-weight:600;">✓ Counted</span>'}</td>
+                  <td>${isEx ? '<span class="badge badge-red">Excluded</span>' : '<span class="badge badge-green">Counted</span>'}</td>
                   <td style="text-align:right;">
                     ${isEx ?
-                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', false)" style="font-size:11px;padding:3px 8px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;">↩ Restore</button>` :
-                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', true)" style="font-size:11px;padding:3px 8px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:4px;cursor:pointer;">✕ Remove</button>`}
+                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', false)" class="pill-btn" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;">↩ Restore</button>` :
+                      `<button type="button" onclick="toggleExcludePrint('${esc(b.id)}', '${esc(docKey)}', true)" class="pill-btn" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer;">✕ Exclude</button>`}
                   </td>
                 </tr>`;
               }).join('')}
@@ -943,10 +970,7 @@ function renderSummary(b) {
         <div class="stock-row-value">${available > 0 ? available.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
-        <div class="stock-row-label">
-          Packed Quantity ${isAutoSynced ? '<span style="font-size:10px;color:var(--muted);">(Stickers)</span>' : ''}
-          ${pkgInfo.adjustmentKg !== 0 ? `<span style="font-size:10px;color:${pkgInfo.adjustmentKg < 0 ? 'var(--red,#dc2626)' : 'var(--green,#16a34a)'};display:block;">(Adj: ${pkgInfo.adjustmentKg > 0 ? '+' : ''}${pkgInfo.adjustmentKg.toFixed(2)} kg)</span>` : ''}
-        </div>
+        <div class="stock-row-label">Packed Quantity ${isAutoSynced ? '<span style="font-size:10px;color:var(--muted);">(Stickers)</span>' : ''}</div>
         <div class="stock-row-value" style="${totalPacked > 0 ? 'color:var(--green);font-weight:700;' : ''}">${totalPacked > 0 ? totalPacked.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
