@@ -86,6 +86,25 @@ export async function loadAllBatches() {
   } catch { return []; }
 }
 
+export function subscribeToBatches(callback) {
+  const db = initBatchDb();
+  if (!db) { callback([]); return () => {}; }
+  try {
+    return onSnapshot(collection(db, BATCH_COLLECTION), snap => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a, b) => ((b.date || b.purchaseDate || '')).localeCompare((a.date || a.purchaseDate || '')));
+      updateCloudBadge(true);
+      callback(docs);
+    }, err => {
+      console.warn('[BatchFirebase] Batches snapshot error:', err);
+      updateCloudBadge(false);
+    });
+  } catch (err) {
+    console.warn('[BatchFirebase] subscribeToBatches error:', err);
+    return () => {};
+  }
+}
+
 export function subscribeToLabelPrints(callback) {
   const db = initLabelDb();
   if (!db) { callback([]); return () => {}; }
@@ -95,9 +114,9 @@ export function subscribeToLabelPrints(callback) {
       const records = [];
       snap.forEach(docSnap => {
         const data = docSnap.data();
-        // FILTER: Match Dukan Bai + 365 Spicery (yellow365 + db) sticker records
+        // FILTER: Match Dukan Bai + 365 Spicery (db) sticker records
         const isValidSticker = (data.stickerType === "dukan") || (data.stickerLabel === "Dukan Bai")
-          || (data.stickerType === "yellow365") || (data.stickerType === "db");
+          || (data.stickerType === "db") || (data.stickerLabel === "365 Spicery");
         const isNotFront = data.labelSide !== "front" && data.packSize !== "FRONT";
         if (isValidSticker && isNotFront) {
           records.push({ id: docSnap.id, ...data });

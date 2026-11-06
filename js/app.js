@@ -1,5 +1,5 @@
 // app.js — 365 Spicery Batch Production & Traceability (Manufacturing ERP Build)
-import { saveBatch as _saveBatchCloud, loadAllBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb } from './firebase-config.js';
+import { saveBatch as _saveBatchCloud, loadAllBatches, subscribeToBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb } from './firebase-config.js';
 
 async function saveBatch(batch) {
   return _saveBatchCloud(batch.id, batch);
@@ -131,10 +131,43 @@ async function init() {
     console.warn('Cloud load failed, using local:', e);
   }
 
-  // Subscribe to label-maker Dukan sticker prints (live)
+  // Subscribe to live batches (real-time sync across devices)
+  try {
+    subscribeToBatches(cloud => {
+      if (cloud && cloud.length > 0) {
+        const cloudIds = new Set(cloud.map(b => b.id));
+        const localOnly = allBatches.filter(b => !cloudIds.has(b.id));
+        allBatches = [...cloud, ...localOnly].sort((a,b) =>
+          (b.date||'').localeCompare(a.date||''));
+        saveLocal(allBatches);
+        filtered = [...allBatches];
+        renderList();
+        if (currentId) {
+          const currentExists = allBatches.find(b => b.id === currentId);
+          if (currentExists) {
+            renderDetail(currentExists);
+            renderSummary(currentExists);
+          } else if (allBatches.length > 0) {
+            openDetail(allBatches[0].id);
+          }
+        } else if (allBatches.length > 0) {
+          openDetail(allBatches[0].id);
+        }
+      }
+    });
+  } catch (e) { console.warn('Batches live subscription failed:', e); }
+
+  // Subscribe to label-maker sticker prints (live)
   try {
     subscribeToLabelPrints(records => {
       _dukanPrints = records;
+      if (currentId) {
+        const b = allBatches.find(x => x.id === currentId);
+        if (b) {
+          renderSummary(b);
+          if (activeStage === 3) renderDetail(b);
+        }
+      }
     });
   } catch (e) { console.warn('Label print subscribe failed:', e); }
 }
@@ -1517,7 +1550,7 @@ function wizStep4(d) {
   const autoFillPanel = matchedPrints.length > 0 ? `
     <div class="divider-label" style="color:var(--green);">📦 Auto-fill from Label Maker Prints</div>
     <div class="info-box green" style="margin-bottom:10px;">
-      ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan sticker printer. Click "Add →" to auto-fill pack rows.
+      ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan / 365 Spicery sticker printer. Click "Add →" to auto-fill pack rows.
     </div>
     <div style="overflow-x:auto;margin-bottom:16px;">
       <table class="pkg-table">
@@ -1526,7 +1559,7 @@ function wizStep4(d) {
       </table>
     </div>` : `
     <div class="info-box blue" style="margin-bottom:16px;">
-      ℹ️ No Dukan sticker prints found for "<strong>${esc(productName)}</strong>" yet. Prints from label-maker will appear here automatically.
+      ℹ️ No sticker prints found for "<strong>${esc(productName)}</strong>" yet. Prints from label-maker (Dukan or 365 Spicery) will appear here automatically.
     </div>`;
 
   return `
