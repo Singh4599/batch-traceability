@@ -95,10 +95,11 @@ export function subscribeToLabelPrints(callback) {
       const records = [];
       snap.forEach(docSnap => {
         const data = docSnap.data();
-        // STRICT FILTER: Match Dukan Bai sticker records (dukan-stock software logic)
-        const isDukan = (data.stickerType === "dukan") || (data.stickerLabel === "Dukan Bai");
+        // FILTER: Match Dukan Bai + 365 Spicery (yellow365 + db) sticker records
+        const isValidSticker = (data.stickerType === "dukan") || (data.stickerLabel === "Dukan Bai")
+          || (data.stickerType === "yellow365") || (data.stickerType === "db");
         const isNotFront = data.labelSide !== "front" && data.packSize !== "FRONT";
-        if (isDukan && isNotFront) {
+        if (isValidSticker && isNotFront) {
           records.push({ id: docSnap.id, ...data });
         }
       });
