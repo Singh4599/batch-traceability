@@ -58,13 +58,35 @@ export function initLabelDb() {
   } catch { return null; }
 }
 
+function removeUndefined(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(removeUndefined);
+  const cleaned = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      cleaned[k] = removeUndefined(v);
+    }
+  }
+  return cleaned;
+}
+
 export async function saveBatch(id, data) {
   const db = initBatchDb();
-  if (!db) return false;
+  if (!db) {
+    console.error('[BatchFirebase] saveBatch: DB not ready');
+    return false;
+  }
   try {
-    await setDoc(doc(db, BATCH_COLLECTION, id), { ...data, updatedAt: Date.now() }, { merge: true });
-    updateCloudBadge(true); return true;
-  } catch (err) { updateCloudBadge(false); return false; }
+    const cleaned = removeUndefined({ ...data, updatedAt: Date.now() });
+    await setDoc(doc(db, BATCH_COLLECTION, id), cleaned, { merge: true });
+    updateCloudBadge(true);
+    console.log('[BatchFirebase] Batch saved to cloud:', id);
+    return true;
+  } catch (err) {
+    console.error('[BatchFirebase] saveBatch error:', err);
+    updateCloudBadge(false);
+    return false;
+  }
 }
 
 export async function deleteBatchDoc(id) {

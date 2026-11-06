@@ -87,6 +87,74 @@ function parsePackSizeKg(s) {
   if (s.includes('g'))  return num(s.replace('g','')) / 1000;
   return 0;
 }
+
+// ── BATCH PACKAGING & LIVE PRINTS HELPER ─────────────────────────────────────
+function getBatchPrintedStats(b) {
+  if (!b || !b.productName) return { totalKg: 0, totalUnits: 0, matchedPrints: [], rows: [] };
+
+  const productName = (b.productName || '').toUpperCase().trim();
+  const matched = _dukanPrints.filter(r => {
+    const rn = (r.productName || '').toUpperCase().trim();
+    if (!rn || !productName) return false;
+    return rn === productName || rn.includes(productName) || productName.includes(rn);
+  });
+
+  const grouped = {};
+  let totalWeightG = 0;
+  let totalUnits = 0;
+
+  matched.forEach(r => {
+    const ps = r.packSize || '—';
+    if (!grouped[ps]) grouped[ps] = { packSize: ps, packs: 0, totalKg: 0 };
+    const copies = num(r.copies) || 1;
+    const kg = (num(r.totalWeightG) / 1000) || ((num(r.weightG) * copies) / 1000) || 0;
+    grouped[ps].packs += copies;
+    grouped[ps].totalKg += kg;
+    totalWeightG += (num(r.totalWeightG) || (num(r.weightG) * copies) || 0);
+    totalUnits += copies;
+  });
+
+  const rows = Object.values(grouped).map(g => ({
+    packSize: g.packSize,
+    packs: g.packs,
+    totalKg: parseFloat(g.totalKg.toFixed(2))
+  }));
+
+  const totalKg = parseFloat((totalWeightG / 1000).toFixed(2));
+  return { totalKg, totalUnits, matchedPrints: matched, rows };
+}
+
+function getBatchPackagingInfo(b) {
+  if (!b) return { rows: [], totalPacked: 0, totalUnits: 0, available: 0, remaining: 0, isAutoSynced: false, printCount: 0 };
+
+  const manualRows = b.packagingRows || [];
+  const manualPacked = manualRows.reduce((s, r) => s + num(r.totalKg), 0) || num(b.packagingOutput);
+  const manualUnits = manualRows.reduce((s, r) => s + num(r.packs), 0) || num(b.unitsPacked);
+
+  const printStats = getBatchPrintedStats(b);
+
+  // If no manual packaging rows were entered, automatically use live printed sticker counts
+  const usePrints = manualRows.length === 0 && printStats.totalKg > 0;
+
+  const effectiveRows = manualRows.length > 0 ? manualRows : printStats.rows;
+  const totalPacked = manualRows.length > 0 ? manualPacked : printStats.totalKg;
+  const totalUnits = manualRows.length > 0 ? manualUnits : printStats.totalUnits;
+
+  const ings = b.ingredients || [];
+  const totalRawWeight = ings.reduce((s, i) => s + num(i.totalQty), 0);
+  const available = num(b.sentToShop) || num(b.packagingOutput) || num(b.totalNetWeight) || totalRawWeight || 0;
+  const remaining = Math.max(0, available - totalPacked);
+
+  return {
+    rows: effectiveRows,
+    totalPacked,
+    totalUnits,
+    available,
+    remaining,
+    isAutoSynced: usePrints,
+    printCount: printStats.matchedPrints.length
+  };
+}
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
   if (!t) return;
@@ -115,10 +183,19 @@ async function init() {
   // Then sync from cloud
   try {
     const cloud = await loadAllBatches();
+    const cloudIds = new Set(cloud.map(b => b.id));
+    const localOnly = allBatches.filter(b => !cloudIds.has(b.id));
+
+    // Auto-sync any local batches that failed to upload to Firestore earlier
+    if (localOnly.length > 0) {
+      console.log(`[BatchSync] Uploading ${localOnly.length} local-only batches to Firestore...`);
+      localOnly.forEach(b => {
+        saveBatch(b).catch(err => console.warn('Sync failed for batch:', b.id, err));
+      });
+    }
+
     if (cloud.length > 0) {
       // Merge: prefer cloud, keep any local-only
-      const cloudIds = new Set(cloud.map(b => b.id));
-      const localOnly = allBatches.filter(b => !cloudIds.has(b.id));
       allBatches = [...cloud, ...localOnly].sort((a,b) =>
         (b.date||'').localeCompare(a.date||''));
       saveLocal(allBatches);
@@ -161,11 +238,12 @@ async function init() {
   try {
     subscribeToLabelPrints(records => {
       _dukanPrints = records;
+      renderList();
       if (currentId) {
         const b = allBatches.find(x => x.id === currentId);
         if (b) {
           renderSummary(b);
-          if (activeStage === 3) renderDetail(b);
+          renderDetail(b);
         }
       }
     });
@@ -239,7 +317,8 @@ function renderList() {
                     b.qcStatus === 'Rejected'   ? `<span class="badge badge-red">${esc(b.qcStatus)}</span>` :
                     b.qcStatus                  ? `<span class="badge badge-orange">${esc(b.qcStatus)}</span>` : '';
     const procBadge = b.processingLocation      ? `<span class="badge badge-blue">${esc(b.processingLocation)}</span>` : '';
-    const pkgBadge  = getPackagingStatus(b)     ? `<span class="badge badge-green">Packaged</span>` : '';
+    const pkgInfo   = getBatchPackagingInfo(b);
+    const pkgBadge  = pkgInfo.totalPacked > 0   ? `<span class="badge badge-green">${pkgInfo.totalPacked.toFixed(1)} kg Packed${pkgInfo.isAutoSynced ? ' (Live)' : ''}</span>` : '';
     const isActive  = b.id === currentId;
 
     return `<div class="batch-card ${isActive ? 'active' : ''}" onclick="openDetail('${b.id}')">
@@ -258,11 +337,8 @@ function renderList() {
 }
 
 function getPackagingStatus(b) {
-  if (b.packagingRows && b.packagingRows.length > 0) {
-    const totalPacked = b.packagingRows.reduce((s,r) => s + num(r.totalKg), 0);
-    return totalPacked > 0;
-  }
-  return num(b.packagingOutput) > 0;
+  const pkgInfo = getBatchPackagingInfo(b);
+  return pkgInfo.totalPacked > 0;
 }
 
 // ── STAGE STEPPER (detail view) ───────────────────────────────────────────────
@@ -565,11 +641,13 @@ function renderStage3Detail(b) {
 
 // Stage 4 Detail — Packaging
 function renderStage4Detail(b) {
-  const rows = b.packagingRows || [];
-  const totalPacked = rows.reduce((s,r) => s + num(r.totalKg), 0) || num(b.packagingOutput);
-  const totalUnits  = rows.reduce((s,r) => s + num(r.packs), 0)   || num(b.unitsPacked);
-  const available   = num(b.sentToShop) || num(b.packagingOutput) || 0;
-  const remaining   = Math.max(0, available - totalPacked);
+  const info = getBatchPackagingInfo(b);
+  const rows = info.rows;
+  const totalPacked = info.totalPacked;
+  const totalUnits  = info.totalUnits;
+  const available   = info.available;
+  const remaining   = info.remaining;
+  const isAutoSynced = info.isAutoSynced;
 
   return `<div class="section-block">
     <div class="section-head">
@@ -579,19 +657,24 @@ function renderStage4Detail(b) {
         <div class="sh-sub">Pack sizes · Units packed · Total packaged quantity</div>
       </div>
       <div class="sh-badge">${totalPacked > 0 ?
-        `<span class="badge badge-green">${totalPacked.toFixed(1)} kg Packed</span>` :
+        `<span class="badge badge-green">${totalPacked.toFixed(1)} kg Packed${isAutoSynced ? ' (Live)' : ''}</span>` :
         `<span class="badge badge-gray">Pending</span>`}</div>
     </div>
     <div class="section-body">
+      ${isAutoSynced ? `
+      <div class="info-box green" style="margin-bottom:14px;">
+        🟢 <strong>Live Auto-Deduction Active:</strong> Automatically tracking <strong>${info.printCount} back sticker prints</strong> from label printer. Stock decreases live as stickers print!
+      </div>` : ''}
+
       ${rows.length > 0 || totalPacked > 0 ? `
       <div class="detail-kv-grid g2" style="margin-bottom:18px;">
         <div class="dkv">
           <div class="dkv-label">Packaging Date</div>
-          <div class="dkv-value">${fmt(b.packagingDate||b.mfgDate)}</div>
+          <div class="dkv-value">${fmt(b.packagingDate||b.mfgDate||b.date)}</div>
         </div>
         <div class="dkv">
           <div class="dkv-label">MFG Date</div>
-          <div class="dkv-value">${fmt(b.mfgDate)}</div>
+          <div class="dkv-value">${fmt(b.mfgDate||b.date)}</div>
         </div>
         <div class="dkv">
           <div class="dkv-label">Expiry Date</div>
@@ -599,7 +682,7 @@ function renderStage4Detail(b) {
         </div>
         <div class="dkv">
           <div class="dkv-label">Packaging Location</div>
-          <div class="dkv-value">${esc(b.packagingLocation||b.processingLocation||'—')}</div>
+          <div class="dkv-value">${esc(b.packagingLocation||b.processingLocation||'Shop')}</div>
         </div>
         ${b.receivingDate ? `<div class="dkv"><div class="dkv-label">Date of Receiving</div><div class="dkv-value">${fmt(b.receivingDate)}</div></div>` : ''}
         ${b.receivedBy ? `<div class="dkv"><div class="dkv-label">Received By</div><div class="dkv-value">${esc(b.receivedBy)}</div></div>` : ''}
@@ -634,22 +717,22 @@ function renderStage4Detail(b) {
 
       <div class="pkg-balance-bar" style="margin-top:14px;">
         <div class="pbb-item total">
-          <div class="pbb-lbl">Available</div>
+          <div class="pbb-lbl">Processed Available</div>
           <div class="pbb-val">${available.toFixed(2)} kg</div>
         </div>
         <div class="pbb-item">
-          <div class="pbb-lbl">Packed</div>
+          <div class="pbb-lbl">Packed ${isAutoSynced ? '(Stickers)' : ''}</div>
           <div class="pbb-val">${totalPacked.toFixed(2)} kg</div>
         </div>
         <div class="pbb-item ${remaining > 0 ? 'warn' : ''}">
-          <div class="pbb-lbl">Remaining</div>
+          <div class="pbb-lbl">Remaining Unpacked</div>
           <div class="pbb-val">${remaining.toFixed(2)} kg</div>
         </div>
       </div>` :
       `<div class="empty-state" style="min-height:140px;">
         <div class="empty-icon" style="font-size:28px;">📦</div>
-        <div class="empty-title">Packaging Not Recorded</div>
-        <div class="empty-sub">Edit this batch and complete Stage 4 to record packaging details</div>
+        <div class="empty-title">No Packaging Records Yet</div>
+        <div class="empty-sub">Prints from label printer will automatically appear here and deduct stock, or edit batch to enter manually.</div>
       </div>`}
     </div>
   </div>`;
@@ -673,10 +756,11 @@ function renderSummary(b) {
   const ings = b.ingredients || [];
   const totalWt   = ings.reduce((s,i) => s + num(i.totalQty), 0);
   const totalBags = ings.reduce((s,i) => s + num(i.bags), 0);
-  const pkgRows   = b.packagingRows || [];
-  const totalPacked = pkgRows.reduce((s,r) => s + num(r.totalKg), 0) || num(b.packagingOutput);
-  const available   = num(b.sentToShop) || num(b.packagingOutput) || 0;
-  const remaining   = Math.max(0, available - totalPacked);
+  const pkgInfo   = getBatchPackagingInfo(b);
+  const totalPacked = pkgInfo.totalPacked;
+  const available   = pkgInfo.available;
+  const remaining   = pkgInfo.remaining;
+  const isAutoSynced = pkgInfo.isAutoSynced;
 
   const stagesDone = [
     ings.length > 0,
@@ -717,18 +801,19 @@ function renderSummary(b) {
       <div class="stock-card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         Live Stock Position
+        ${isAutoSynced ? '<span style="font-size:10px;font-weight:600;color:var(--green);margin-left:auto;">🟢 Auto-Deducting</span>' : ''}
       </div>
       <div class="stock-row">
         <div class="stock-row-label">Processed Quantity</div>
         <div class="stock-row-value">${available > 0 ? available.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
-        <div class="stock-row-label">Packed Quantity</div>
-        <div class="stock-row-value">${totalPacked > 0 ? totalPacked.toFixed(2) + ' kg' : '0.00 kg'}</div>
+        <div class="stock-row-label">Packed Quantity ${isAutoSynced ? '<span style="font-size:10px;color:var(--muted);">(Stickers)</span>' : ''}</div>
+        <div class="stock-row-value" style="${totalPacked > 0 ? 'color:var(--green);font-weight:700;' : ''}">${totalPacked > 0 ? totalPacked.toFixed(2) + ' kg' : '0.00 kg'}</div>
       </div>
       <div class="stock-row">
         <div class="stock-row-label">Remaining Quantity</div>
-        <div class="stock-row-value" style="${remaining > 0 ? 'color:var(--orange)' : ''}">${remaining.toFixed(2)} kg</div>
+        <div class="stock-row-value" style="${remaining > 0 ? 'color:var(--orange)' : 'color:var(--green)'}">${remaining.toFixed(2)} kg</div>
       </div>
     </div>
   `;
@@ -1549,8 +1634,11 @@ function wizStep4(d) {
 
   const autoFillPanel = matchedPrints.length > 0 ? `
     <div class="divider-label" style="color:var(--green);">📦 Auto-fill from Label Maker Prints</div>
-    <div class="info-box green" style="margin-bottom:10px;">
-      ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan / 365 Spicery sticker printer. Click "Add →" to auto-fill pack rows.
+    <div class="info-box green" style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div>
+        ✅ Found <strong>${matchedPrints.length} print record(s)</strong> for <strong>${esc(productName)}</strong> from Dukan / 365 Spicery sticker printer. Live auto-deduction is active!
+      </div>
+      <button type="button" onclick="autoFillAllPkgRows()" style="font-size:12px;font-weight:600;padding:5px 12px;background:var(--green,#16a34a);color:#fff;border:none;border-radius:6px;cursor:pointer;">Add All →</button>
     </div>
     <div style="overflow-x:auto;margin-bottom:16px;">
       <table class="pkg-table">
@@ -1674,6 +1762,11 @@ window.autoFillPkgRow = function(packSize, copies, btn) {
     b.style.background = 'var(--green,#16a34a)';
     b.style.cursor = 'default';
   }
+};
+
+window.autoFillAllPkgRows = function() {
+  const btns = Array.from(document.querySelectorAll('.btn-autofill-row')).filter(b => !b.disabled);
+  btns.forEach(b => b.click());
 };
 
 window.calcPkgRow = function(inp) {
@@ -1832,47 +1925,47 @@ function collectPartialData() {
   const qcn = document.getElementById('f-qcnotes');
   d.qcRemarks = (qcr?.value || qcn?.value || '').trim();
   const qcrqty = document.getElementById('f-qcrejectqty');
-  if (qcrqty) d.qcRejectedQty = num(qcrqty.value) || undefined;
+  if (qcrqty && num(qcrqty.value) > 0) d.qcRejectedQty = num(qcrqty.value);
 
   // Step 3
   const pl = document.getElementById('f-procloc');
   if (pl) d.processingLocation = pl.value;
   const fn = document.getElementById('f-factoryname');
-  if (fn) d.factoryName = fn.value.trim();
+  if (fn && fn.value.trim()) d.factoryName = fn.value.trim();
   const ib = document.getElementById('f-intbatch');
-  if (ib) d.internalBatchNo = ib.value.trim();
+  if (ib && ib.value.trim()) d.internalBatchNo = ib.value.trim();
   const pd = document.getElementById('f-procdate');
-  if (pd) d.processingDate = pd.value;
+  if (pd && pd.value) d.processingDate = pd.value;
   const stf = document.getElementById('f-senttofactory');
-  if (stf) d.sentToFactory = num(stf.value) || undefined;
+  if (stf && num(stf.value) > 0) d.sentToFactory = num(stf.value);
   const sh = document.getElementById('f-shortage');
-  if (sh) d.factoryShortage = num(sh.value) || undefined;
+  if (sh && num(sh.value) > 0) d.factoryShortage = num(sh.value);
   const shPct = document.getElementById('f-shortage-pct');
-  if (shPct) d.factoryShortagePct = num(shPct.value) || undefined;
+  if (shPct && num(shPct.value) > 0) d.factoryShortagePct = num(shPct.value);
   const sts = document.getElementById('f-senttoshop');
-  if (sts) d.sentToShop = num(sts.value) || undefined;
+  if (sts && num(sts.value) > 0) d.sentToShop = num(sts.value);
   const pn = document.getElementById('f-procnotes');
-  if (pn) d.processingNotes = pn.value.trim();
+  if (pn && pn.value.trim()) d.processingNotes = pn.value.trim();
   const movs = collectMovements();
   if (movs.length > 0) d.stockMovements = movs;
 
   // Step 4
   const pkgd = document.getElementById('f-pkgdate');
-  if (pkgd) d.packagingDate = pkgd.value;
+  if (pkgd && pkgd.value) d.packagingDate = pkgd.value;
   const pkgl = document.getElementById('f-pkgloc');
-  if (pkgl) d.packagingLocation = pkgl.value;
+  if (pkgl && pkgl.value) d.packagingLocation = pkgl.value;
   const mfgd = document.getElementById('f-mfgdate');
-  if (mfgd) d.mfgDate = mfgd.value;
+  if (mfgd && mfgd.value) d.mfgDate = mfgd.value;
   const exd = document.getElementById('f-expirydate');
-  if (exd) d.expiryDate = exd.value;
+  if (exd && exd.value) d.expiryDate = exd.value;
   const pkgn = document.getElementById('f-packnotes');
-  if (pkgn) d.packagingNotes = pkgn.value.trim();
+  if (pkgn && pkgn.value.trim()) d.packagingNotes = pkgn.value.trim();
   const pkgRows = collectPackagingRows();
   if (pkgRows.length > 0) d.packagingRows = pkgRows;
   const recvdt = document.getElementById('f-recvdate');
-  if (recvdt) d.receivingDate = recvdt.value;
+  if (recvdt && recvdt.value) d.receivingDate = recvdt.value;
   const recvby = document.getElementById('f-recvby');
-  if (recvby) d.receivedBy = recvby.value.trim();
+  if (recvby && recvby.value.trim()) d.receivedBy = recvby.value.trim();
 
   return d;
 }
@@ -1972,8 +2065,9 @@ function _todayStr() {
 function _renderBatchDossierHtml(b, isLastPage) {
   const ings = b.ingredients || [];
   const totalNet = ings.reduce((s,i) => s + num(i.totalQty), 0);
-  const pkgRows = b.packagingRows || [];
-  const totalPacked = pkgRows.reduce((s,r) => s + num(r.totalKg), 0) || num(b.packagingOutput);
+  const pkgInfo = getBatchPackagingInfo(b);
+  const pkgRows = pkgInfo.rows;
+  const totalPacked = pkgInfo.totalPacked;
   const movements = b.stockMovements || [];
 
   return `<div class="dossier-page" style="page-break-after:${isLastPage ? 'avoid' : 'always'}; margin-bottom:28px;">
