@@ -1,5 +1,5 @@
 // app.js — 365 Spicery Batch Production & Traceability (Manufacturing ERP Build)
-import { saveBatch as _saveBatchCloud, loadAllBatches, subscribeToBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb, parseDateMs } from './firebase-config.js';
+import { saveBatch as _saveBatchCloud, loadAllBatches, subscribeToBatches, deleteBatchDoc, subscribeToLabelPrints, initLabelDb, parseDateMs, PRINTS_CUTOFF_MS } from './firebase-config.js';
 
 async function saveBatch(batch) {
   return _saveBatchCloud(batch.id, batch);
@@ -111,10 +111,10 @@ function getBatchPrintedStats(b) {
   const productName = (b.productName || '').toUpperCase().trim();
   const normBatchName = normalizeName(productName);
 
-  // Filter prints on or after the batch date
-  let batchCutoffMs = 0;
-  if (b.date) {
-    batchCutoffMs = parseDateMs(b.date);
+  // Filter prints on or after cutoff (06 Nov 2026, 04:55 PM onwards — ignores morning test prints)
+  let batchCutoffMs = Math.max(PRINTS_CUTOFF_MS, num(b.printsCutoff) || 0);
+  if (b.createdAt && typeof b.createdAt === 'number') {
+    batchCutoffMs = Math.max(batchCutoffMs, b.createdAt);
   }
 
   const matched = _dukanPrints.filter(r => {
@@ -710,8 +710,11 @@ function renderStage4Detail(b) {
     </div>
     <div class="section-body">
       ${isAutoSynced ? `
-      <div class="info-box green" style="margin-bottom:14px;">
-        🟢 <strong>Live Auto-Deduction Active:</strong> Automatically tracking <strong>${info.printCount} back sticker prints</strong> from label printer. Stock decreases live as stickers print!
+      <div class="info-box green" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          🟢 <strong>Live Auto-Deduction Active:</strong> Automatically tracking <strong>${info.printCount} back sticker prints</strong> from label printer. Stock decreases live as stickers print!
+        </div>
+        <button type="button" onclick="resetBatchPrintsCutoff('${esc(b.id)}')" style="font-size:11px;font-weight:600;padding:4px 10px;background:#fff;border:1px solid #86efac;border-radius:6px;cursor:pointer;color:#166534;">🔄 Reset Counter to Now</button>
       </div>` : ''}
 
       ${rows.length > 0 || totalPacked > 0 ? `
@@ -1802,6 +1805,18 @@ window.autoFillPkgRow = function(packSize, copies, btn) {
 window.autoFillAllPkgRows = function() {
   const btns = Array.from(document.querySelectorAll('.btn-autofill-row')).filter(b => !b.disabled);
   btns.forEach(b => b.click());
+};
+
+window.resetBatchPrintsCutoff = async function(id) {
+  if (!confirm('Live print counter ko abhi ke time par reset karein? Iske pehle ke prints count nahi honge.')) return;
+  const b = allBatches.find(x => x.id === id);
+  if (!b) return;
+  b.printsCutoff = Date.now();
+  await saveBatch(b);
+  renderSummary(b);
+  renderDetail(b);
+  renderList();
+  showToast('Live print counter reset to now!', 'success');
 };
 
 window.calcPkgRow = function(inp) {

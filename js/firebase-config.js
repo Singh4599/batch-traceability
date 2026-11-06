@@ -149,8 +149,8 @@ export function subscribeToBatches(callback) {
   }
 }
 
-// Cutoff: only sync label prints from today (06 Nov 2026) onwards
-const PRINTS_CUTOFF_MS = new Date('2026-11-06T00:00:00').getTime();
+// Cutoff: only sync label prints from just now (06 Nov 2026, 04:55 PM onwards — ignores morning test prints)
+export const PRINTS_CUTOFF_MS = new Date('2026-11-06T16:55:00+05:30').getTime();
 
 export function subscribeToLabelPrints(callback) {
   const lDb = initLabelDb();
